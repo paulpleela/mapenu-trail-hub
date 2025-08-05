@@ -13,16 +13,20 @@ Trail running is gaining momentum worldwide as a competitive sport and is curren
 This project aims to develop a system capable of measuring, identifying and classifying “rolling hills” (short, frequent undulations in trail segments) using geospatial data from GNSS devices and/or publicly available sources such as Lidar point clouds or digital terrain models. The project focuses on designing a reproducible and scalable method to measure, detect, and characterize micro-oscillations in elevation profiles, particularly in trails that appear to have continuous slope but include hidden fluctuations. These patterns are commonly found on erosion-controlled paths in natural settings like Mt Coot-tha and are highly relevant for accurate course certification in competitive and Olympic-level trail running. The outcome should support trail classification and trail difficulty estimations. Multiple approaches to measuring, analysing, classifying, and visualizing the terrain are encouraged, leaving room for creative and technical exploration.
 
 ## Success Criteria
-- Identifies and Classifies Rolling Hill Patterns in Trail Elevation Data
+**Identifies and Classifies Rolling Hill Patterns in Trail Elevation Data:**
+
 The system detects human-scale undulations (‘rolling hiils’) using geospatial elevation data (e.g. GNSS, LiDAR, DTM) and classifies them in a way that reflections meaningful trail features relevant to difficulty, certification, and course design.
 
-- Validates Detection Method on Real Trail Segments
+**Validates Detection Method on Real Trail Segments:**
+
 The prototype is tested on real-world trail environments, such as Mt Coot-tha, with results validated through field measurements or expert observations. Identified patterns align with physically noticeable or biomechanically significant terrain variations.
 
-- Supports Reproducible and Scalable Terrain Analysis
+**Supports Reproducible and Scalable Terrain Analysis:**
+
 The method can be applied across different trail segments with minimal adjustment, producing consistent outputs. This demonstrates its potential for use in standardised trail assessment or certification processes.
 
-- Communicates Terrain Complexity Through Clear Visual Outputs
+**Communicates Terrain Complexity Through Clear Visual Outputs:**
+
 The system presents elevation features and rolling hill patterns through intuitive visualisations or summary metrics, supporting interpretations by stakeholders such as certifiers, race organisers, or athletes.
 
 ## Technologies, Techniques to Consider
