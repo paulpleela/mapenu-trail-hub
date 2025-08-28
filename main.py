@@ -5,6 +5,7 @@ import base64
 from io import BytesIO
 import math
 
+# REF: ChatGPT was used to help write this function
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000  # Earth radius in meters
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -47,7 +48,7 @@ def plot_gpx_with_elevation_popup(gpx_file):
     buf = BytesIO()
     plt.tight_layout()
     plt.savefig(buf, format='png', bbox_inches='tight')
-    buf.seek(0)  # Rewind buffer
+    buf.seek(0)
     encoded = base64.b64encode(buf.read()).decode('utf-8')
     buf.close()
     plt.close(fig)
@@ -71,7 +72,6 @@ def plot_gpx_with_elevation_popup(gpx_file):
 
     return m
 
-# Usage
 # SOURCE FOR THE GPX DATA: # https://www.aussiebushwalking.com/qld/se-qld/brisbane-forest-park-d-aguilar-np/mt-coot-tha/mt-coot-tha-summit-track#:~:text=GPS%20Tracks
 gpx_path = "43-mt-coot-tha-summit-track.gpx"
 map_object = plot_gpx_with_elevation_popup(gpx_path)
