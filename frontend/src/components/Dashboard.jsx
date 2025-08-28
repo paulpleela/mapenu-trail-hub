@@ -323,20 +323,22 @@ export default function Dashboard() {
         if (data.success) {
           // Reload trails to include the new one
           await loadTrails();
-          alert(`Trail "${data.trail.name}" uploaded successfully!`);
+          console.log(`Trail "${data.trail.name}" uploaded successfully!`);
         } else {
-          alert("Error processing GPX file: " + (data.detail || data.error));
+          console.error(
+            "Error processing GPX file:",
+            data.detail || data.error
+          );
         }
       } catch (error) {
         console.error("Upload error:", error);
-        alert("Error uploading GPX file: " + error.message);
       } finally {
         setIsImporting(false);
         // Reset file input
         event.target.value = "";
       }
     } else if (file) {
-      alert("Please select a valid GPX file");
+      console.warn("Please select a valid GPX file");
     }
   };
 
