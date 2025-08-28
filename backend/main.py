@@ -321,6 +321,42 @@ async def upload_gpx(file: UploadFile = File(...)):
         else:
             difficulty_level = "Extreme"
 
+        # Check for duplicate trails before inserting
+        # First check by exact name match
+        existing_trails_response = (
+            supabase.table("trails").select("*").eq("name", trail_name).execute()
+        )
+
+        if existing_trails_response.data:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Trail with name '{trail_name}' already exists in database",
+            )
+
+        # Check for similar starting coordinates (within ~100m radius)
+        # This prevents uploading the same trail with different names
+        start_lat, start_lon = coords[0]
+        all_trails_response = (
+            supabase.table("trails").select("name, coordinates").execute()
+        )
+
+        for existing_trail in all_trails_response.data:
+            if existing_trail.get("coordinates"):
+                existing_start = existing_trail["coordinates"][0]
+                existing_lat, existing_lon = existing_start
+
+                # Calculate distance between starting points
+                distance_between_starts = haversine(
+                    start_lat, start_lon, existing_lat, existing_lon
+                )
+
+                # If starts are within 100 meters, likely duplicate
+                if distance_between_starts < 100:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Trail starting near same location as existing trail '{existing_trail['name']}' (within 100m). Possible duplicate.",
+                    )
+
         # Create new trail data for Supabase
         new_trail_data = {
             "name": trail_name,

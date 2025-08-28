@@ -219,6 +219,7 @@ export default function Dashboard() {
   const [selectedTrail, setSelectedTrail] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -307,6 +308,7 @@ export default function Dashboard() {
     if (file && file.name.endsWith(".gpx")) {
       console.log("Valid GPX file, starting upload...");
       setIsImporting(true);
+      setIsDuplicate(false); // Reset duplicate state
 
       try {
         const formData = new FormData();
@@ -321,7 +323,7 @@ export default function Dashboard() {
         const data = await response.json();
         console.log("Upload response:", data);
 
-        if (data.success) {
+        if (response.ok && data.success) {
           console.log(`Trail "${data.trail.name}" uploaded successfully!`);
 
           // Cool loading effect - show processing state
@@ -334,18 +336,28 @@ export default function Dashboard() {
             setIsProcessing(false);
           }, 1000); // 1 second loading effect
         } else {
-          console.error(
-            "Error processing GPX file:",
-            data.detail || data.error
-          );
+          // Handle errors including duplicates
+          let errorMessage = data.detail || data.error || "Upload failed";
+
+          if (response.status === 409) {
+            // Duplicate trail error
+            console.warn("Duplicate trail detected:", errorMessage);
+            setIsImporting(false);
+            setIsDuplicate(true);
+
+            // Show duplicate feedback briefly
+            setTimeout(() => {
+              setIsDuplicate(false);
+            }, 2000); // Show for 2 seconds
+          } else {
+            console.error("Error processing GPX file:", errorMessage);
+            setIsImporting(false);
+          }
         }
       } catch (error) {
         console.error("Upload error:", error);
+        setIsImporting(false);
       } finally {
-        // Only reset importing state if there was an error
-        if (!data?.success) {
-          setIsImporting(false);
-        }
         // Reset file input
         event.target.value = "";
       }
@@ -425,7 +437,7 @@ export default function Dashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={isImporting || isProcessing}
+                  disabled={isImporting || isProcessing || isDuplicate}
                   className="inline-flex items-center"
                   type="button"
                   onClick={() => {
@@ -437,6 +449,8 @@ export default function Dashboard() {
                     ? "Uploading..."
                     : isProcessing
                     ? "Processing..."
+                    : isDuplicate
+                    ? "Duplicate Trail!"
                     : "Upload GPX"}
                 </Button>
               </div>
