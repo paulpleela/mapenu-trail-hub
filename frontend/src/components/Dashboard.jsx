@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import {
   Select,
   SelectContent,
@@ -80,81 +79,121 @@ const mockTrails = [
   },
 ];
 
-// Map placeholder component
-const MapPlaceholder = ({ selectedTrail }) => {
+// Folium Map Component - uses real Folium maps from backend
+const FoliumMap = ({ selectedTrail, mapUrl, onMapLoad, onTrailClick }) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Listen for messages from the Folium iframe
+  React.useEffect(() => {
+    const handleMessage = (event) => {
+      // Accept messages from localhost
+      if (event.origin !== "http://localhost:8000") {
+        return;
+      }
+
+      if (event.data.type === "trail-clicked") {
+        console.log("Trail clicked, received data:", event.data.data);
+        onTrailClick && onTrailClick(event.data.data);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [onTrailClick]);
+
+  // Load demo map on component mount if no map URL provided
+  React.useEffect(() => {
+    if (!mapUrl && !loading) {
+      loadDemoMap();
+    }
+  }, []);
+
+  const loadDemoMap = async () => {
+    setLoading(true);
+    setError(null);
+    console.log("Attempting to load demo map from backend...");
+
+    try {
+      const response = await fetch("http://localhost:8000/demo-map");
+      console.log("Response status:", response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("Response data:", data);
+
+      if (data.success) {
+        console.log("Map loaded successfully:", data.map_url);
+        onMapLoad(data.map_url, data.trail_stats);
+      } else {
+        console.error("Backend error:", data.error);
+        setError(data.error || "Failed to load demo map");
+      }
+    } catch (err) {
+      console.error("Frontend error:", err);
+      setError(
+        `Backend server not available: ${err.message}. Please ensure Flask server is running.`
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">Generating Folium map...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
+        <div className="text-center max-w-md p-6">
+          <div className="text-red-500 mb-4">
+            <MapPin className="w-12 h-12 mx-auto" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Map Error
+          </h3>
+          <p className="text-gray-600 text-sm mb-4">{error}</p>
+          <Button onClick={loadDemoMap} variant="outline">
+            Retry Demo Map
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!mapUrl) {
+    return (
+      <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
+        <div className="text-center">
+          <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <p className="text-gray-600">No map loaded</p>
+          <Button onClick={loadDemoMap} className="mt-2">
+            Load Demo Map
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full h-full bg-gradient-to-br from-green-100 to-blue-100 rounded-lg flex items-center justify-center relative overflow-hidden">
-      {/* Grid background */}
-      <div className="absolute inset-0 opacity-20">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={`h-${i}`}
-            className="border-b border-gray-400"
-            style={{
-              top: `${i * 12.5}%`,
-              position: "absolute",
-              width: "100%",
-              height: "1px",
-            }}
-          />
-        ))}
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div
-            key={`v-${i}`}
-            className="border-r border-gray-400"
-            style={{
-              left: `${i * 10}%`,
-              position: "absolute",
-              height: "100%",
-              width: "1px",
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Trail path */}
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 800 400">
-        <path
-          d="M 50,300 Q 200,200 350,220 T 600,180 T 750,160"
-          stroke="#059669"
-          strokeWidth="6"
-          fill="none"
-          strokeLinecap="round"
-        />
-        {/* Start marker */}
-        <circle cx="50" cy="300" r="8" fill="#dc2626" />
-        <text
-          x="50"
-          y="320"
-          textAnchor="middle"
-          fill="#dc2626"
-          fontSize="12"
-          fontWeight="bold"
-        >
-          START
-        </text>
-        {/* End marker */}
-        <circle cx="750" cy="160" r="8" fill="#059669" />
-        <text
-          x="750"
-          y="145"
-          textAnchor="middle"
-          fill="#059669"
-          fontSize="12"
-          fontWeight="bold"
-        >
-          FINISH
-        </text>
-      </svg>
-
-      <div className="text-center z-10 bg-white bg-opacity-90 p-4 rounded-lg">
-        <MapPin className="w-8 h-8 text-green-600 mx-auto mb-2" />
-        <h3 className="text-lg font-semibold text-gray-800">Trail Map</h3>
-        <p className="text-gray-600">{selectedTrail?.name}</p>
-        <p className="text-sm text-gray-500 mt-1">
-          {selectedTrail?.distance} km • {selectedTrail?.elevationGain}m gain
-        </p>
-      </div>
+    <div className="w-full h-full rounded-lg overflow-hidden border">
+      <iframe
+        src={`http://localhost:8000${mapUrl}`}
+        className="w-full h-full border-0"
+        title="Trail Map"
+        sandbox="allow-scripts allow-same-origin"
+      />
     </div>
   );
 };
@@ -225,46 +264,69 @@ const StatCard = ({ icon: Icon, label, value, unit }) => (
 export default function Dashboard() {
   const [selectedTrailId, setSelectedTrailId] = useState("mt-coot-tha");
   const [isImporting, setIsImporting] = useState(false);
+  const [mapUrl, setMapUrl] = useState(null);
+  const [realTrailStats, setRealTrailStats] = useState(null);
+  const [activeTrailData, setActiveTrailData] = useState(null);
 
-  const selectedTrail = useMemo(
-    () => mockTrails.find((trail) => trail.id === selectedTrailId),
-    [selectedTrailId]
-  );
+  const selectedTrail = useMemo(() => {
+    // Use active trail data if available (from Folium click), otherwise use mock data
+    if (activeTrailData) {
+      return {
+        ...mockTrails.find((trail) => trail.id === selectedTrailId),
+        distance: activeTrailData.distance,
+        elevationGain: activeTrailData.elevationGain,
+        elevationLoss: activeTrailData.elevationLoss,
+        maxElevation: activeTrailData.maxElevation,
+        minElevation: activeTrailData.minElevation,
+        rollingHillsIndex: activeTrailData.rollingHillsIndex,
+        elevationProfile: activeTrailData.elevationProfile,
+      };
+    }
+    return mockTrails.find((trail) => trail.id === selectedTrailId);
+  }, [selectedTrailId, activeTrailData]);
 
-  const handleGPXImport = (event) => {
+  // Handle map loading from Folium backend
+  const handleMapLoad = (url, stats) => {
+    setMapUrl(url);
+    setRealTrailStats(stats);
+  };
+
+  // Handle trail click from Folium map
+  const handleTrailClick = (trailData) => {
+    console.log("Updating dashboard with trail data:", trailData);
+    setActiveTrailData(trailData);
+  };
+
+  const handleGPXImport = async (event) => {
     const file = event.target.files[0];
     if (file && file.name.endsWith(".gpx")) {
       setIsImporting(true);
 
-      // Read the GPX file
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const gpxContent = e.target.result;
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
 
-        // TODO: Parse GPX and create new trail data
-        // Could use a GPX parsing library or your Python backend
+        const response = await fetch("http://localhost:8000/upload-gpx", {
+          method: "POST",
+          body: formData,
+        });
 
-        setTimeout(() => {
-          setIsImporting(false);
-          alert(
-            `GPX file "${file.name}" loaded successfully!\n\nNext step: Parse elevation data and calculate rolling hills index.`
-          );
-        }, 1500);
-      };
+        const data = await response.json();
 
-      reader.onerror = () => {
+        if (data.success) {
+          handleMapLoad(data.map_url, data.trail_stats);
+          // You could also create a new trail entry in mockTrails here
+        } else {
+          alert("Error processing GPX file: " + data.error);
+        }
+      } catch (error) {
+        alert("Error uploading GPX file: " + error.message);
+      } finally {
         setIsImporting(false);
-        alert("Error reading GPX file");
-      };
-
-      reader.readAsText(file);
-    } else {
-      alert("Please select a valid GPX file");
+      }
     }
-
-    // Reset the input
-    event.target.value = "";
   };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -324,7 +386,12 @@ export default function Dashboard() {
         {/* Top Half - Map */}
         <Card className="h-96">
           <CardContent className="p-4 h-full">
-            <MapPlaceholder selectedTrail={selectedTrail} />
+            <FoliumMap
+              selectedTrail={selectedTrail}
+              mapUrl={mapUrl}
+              onMapLoad={handleMapLoad}
+              onTrailClick={handleTrailClick}
+            />
           </CardContent>
         </Card>
 
@@ -383,6 +450,11 @@ export default function Dashboard() {
               <CardTitle className="flex items-center gap-2">
                 <Mountain className="w-5 h-5" />
                 Elevation Profile
+                {activeTrailData && (
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    Live Data
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
