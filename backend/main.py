@@ -73,6 +73,6 @@ def plot_gpx_with_elevation_popup(gpx_file):
     return m
 
 # SOURCE FOR THE GPX DATA: # https://www.aussiebushwalking.com/qld/se-qld/brisbane-forest-park-d-aguilar-np/mt-coot-tha/mt-coot-tha-summit-track#:~:text=GPS%20Tracks
-gpx_path = "43-mt-coot-tha-summit-track.gpx"
+gpx_path = "./data/43-mt-coot-tha-summit-track.gpx"
 map_object = plot_gpx_with_elevation_popup(gpx_path)
 map_object.save("mt_coot_tha_trail_with_profile.html")
