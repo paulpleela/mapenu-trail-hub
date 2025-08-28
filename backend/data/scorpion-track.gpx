@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<gpx version="1.1" creator="Trailforks.com" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd http://www.garmin.com/xmlschemas/TrackPointExtension/v1 http://www.garmin.com/xmlschemas/TrackPointExtensionv1.xsd">
+<metadata>
+<name>Scorpion Track Trailforks Trail</name>
+<link href="https://www.trailforks.com/">
+<text>Trailforks</text>
+</link>
+</metadata>
+<trk>
+<name>
+Scorpion Track
+</name>
+<trkseg>
+<trkpt lat="-27.48067" lon="152.94323">
+<ele>132</ele>
+<time>2025-08-28T07:03:54-07:00</time>
+</trkpt>
+<trkpt lat="-27.48055" lon="152.94331">
+<ele>132</ele>
+<time>2025-08-28T07:03:55-07:00</time>
+</trkpt>
+<trkpt lat="-27.48041" lon="152.94339">
+<ele>134</ele>
+<time>2025-08-28T07:03:56-07:00</time>
+</trkpt>
+<trkpt lat="-27.48034" lon="152.94345">
+<ele>134</ele>
+<time>2025-08-28T07:03:57-07:00</time>
+</trkpt>
+<trkpt lat="-27.48008" lon="152.94357">
+<ele>140</ele>
+<time>2025-08-28T07:03:58-07:00</time>
+</trkpt>
+<trkpt lat="-27.47987" lon="152.94372">
+<ele>140</ele>
+<time>2025-08-28T07:03:59-07:00</time>
+</trkpt>
+<trkpt lat="-27.47964" lon="152.94381">
+<ele>145</ele>
+<time>2025-08-28T07:04:00-07:00</time>
+</trkpt>
+<trkpt lat="-27.47959" lon="152.94386">
+<ele>145</ele>
+<time>2025-08-28T07:04:01-07:00</time>
+</trkpt>
+<trkpt lat="-27.47944" lon="152.9439">
+<ele>144</ele>
+<time>2025-08-28T07:04:02-07:00</time>
+</trkpt>
+<trkpt lat="-27.47932" lon="152.94399">
+<ele>144</ele>
+<time>2025-08-28T07:04:03-07:00</time>
+</trkpt>
+<trkpt lat="-27.47905" lon="152.94408">
+<ele>147</ele>
+<time>2025-08-28T07:04:04-07:00</time>
+</trkpt>
+<trkpt lat="-27.4789" lon="152.94411">
+<ele>153</ele>
+<time>2025-08-28T07:04:05-07:00</time>
+</trkpt>
+<trkpt lat="-27.47874" lon="152.94413">
+<ele>159</ele>
+<time>2025-08-28T07:04:06-07:00</time>
+</trkpt>
+<trkpt lat="-27.47868" lon="152.94412">
+<ele>159</ele>
+<time>2025-08-28T07:04:07-07:00</time>
+</trkpt>
+<trkpt lat="-27.47854" lon="152.94415">
+<ele>159</ele>
+<time>2025-08-28T07:04:08-07:00</time>
+</trkpt>
+<trkpt lat="-27.47833" lon="152.94415">
+<ele>165</ele>
+<time>2025-08-28T07:04:09-07:00</time>
+</trkpt>
+<trkpt lat="-27.47826" lon="152.94413">
+<ele>165</ele>
+<time>2025-08-28T07:04:10-07:00</time>
+</trkpt>
+<trkpt lat="-27.4782" lon="152.94414">
+<ele>165</ele>
+<time>2025-08-28T07:04:11-07:00</time>
+</trkpt>
+<trkpt lat="-27.47813" lon="152.9442">
+<ele>169</ele>
+<time>2025-08-28T07:04:12-07:00</time>
+</trkpt>
+<trkpt lat="-27.47803" lon="152.94434">
+<ele>172</ele>
+<time>2025-08-28T07:04:13-07:00</time>
+</trkpt>
+<trkpt lat="-27.478" lon="152.9444">
+<ele>172</ele>
+<time>2025-08-28T07:04:14-07:00</time>
+</trkpt>
+<trkpt lat="-27.478" lon="152.94447">
+<ele>172</ele>
+<time>2025-08-28T07:04:15-07:00</time>
+</trkpt>
+<trkpt lat="-27.47795" lon="152.94452">
+<ele>172</ele>
+<time>2025-08-28T07:04:16-07:00</time>
+</trkpt>
+<trkpt lat="-27.47779" lon="152.94461">
+<ele>183</ele>
+<time>2025-08-28T07:04:17-07:00</time>
+</trkpt>
+<trkpt lat="-27.47769" lon="152.94461">
+<ele>183</ele>
+<time>2025-08-28T07:04:18-07:00</time>
+</trkpt>
+<trkpt lat="-27.47764" lon="152.9447">
+<ele>183</ele>
+<time>2025-08-28T07:04:19-07:00</time>
+</trkpt>
+<trkpt lat="-27.47766" lon="152.94478">
+<ele>183</ele>
+<time>2025-08-28T07:04:20-07:00</time>
+</trkpt>
+<trkpt lat="-27.47772" lon="152.94487">
+<ele>190</ele>
+<time>2025-08-28T07:04:21-07:00</time>
+</trkpt>
+<trkpt lat="-27.47774" lon="152.94493">
+<ele>190</ele>
+<time>2025-08-28T07:04:22-07:00</time>
+</trkpt>
+<trkpt lat="-27.47774" lon="152.94511">
+<ele>190</ele>
+<time>2025-08-28T07:04:23-07:00</time>
+</trkpt>
+<trkpt lat="-27.47781" lon="152.94538">
+<ele>195</ele>
+<time>2025-08-28T07:04:24-07:00</time>
+</trkpt>
+<trkpt lat="-27.47778" lon="152.94539">
+<ele>195</ele>
+<time>2025-08-28T07:04:25-07:00</time>
+</trkpt>
+<trkpt lat="-27.4774" lon="152.94523">
+<ele>204</ele>
+<time>2025-08-28T07:04:26-07:00</time>
+</trkpt>
+<trkpt lat="-27.47728" lon="152.94524">
+<ele>212</ele>
+<time>2025-08-28T07:04:27-07:00</time>
+</trkpt>
+<trkpt lat="-27.4772" lon="152.94521">
+<ele>212</ele>
+<time>2025-08-28T07:04:28-07:00</time>
+</trkpt>
+<trkpt lat="-27.47716" lon="152.94528">
+<ele>212</ele>
+<time>2025-08-28T07:04:29-07:00</time>
+</trkpt>
+<trkpt lat="-27.47707" lon="152.94531">
+<ele>222</ele>
+<time>2025-08-28T07:04:30-07:00</time>
+</trkpt>
+<trkpt lat="-27.47702" lon="152.94537">
+<ele>222</ele>
+<time>2025-08-28T07:04:31-07:00</time>
+</trkpt>
+<trkpt lat="-27.4767" lon="152.94538">
+<ele>228</ele>
+<time>2025-08-28T07:04:32-07:00</time>
+</trkpt>
+<trkpt lat="-27.47643" lon="152.94529">
+<ele>231</ele>
+<time>2025-08-28T07:04:33-07:00</time>
+</trkpt>
+<trkpt lat="-27.4763" lon="152.9453">
+<ele>231</ele>
+<time>2025-08-28T07:04:34-07:00</time>
+</trkpt>
+<trkpt lat="-27.4761" lon="152.9454">
+<ele>233</ele>
+<time>2025-08-28T07:04:35-07:00</time>
+</trkpt>
+<trkpt lat="-27.47599" lon="152.94556">
+<ele>240</ele>
+<time>2025-08-28T07:04:36-07:00</time>
+</trkpt>
+<trkpt lat="-27.47593" lon="152.9456">
+<ele>239</ele>
+<time>2025-08-28T07:04:37-07:00</time>
+</trkpt>
+<trkpt lat="-27.47582" lon="152.94563">
+<ele>239</ele>
+<time>2025-08-28T07:04:38-07:00</time>
+</trkpt>
+<trkpt lat="-27.47573" lon="152.94571">
+<ele>247</ele>
+<time>2025-08-28T07:04:39-07:00</time>
+</trkpt>
+<trkpt lat="-27.47565" lon="152.94581">
+<ele>246</ele>
+<time>2025-08-28T07:04:40-07:00</time>
+</trkpt>
+<trkpt lat="-27.47563" lon="152.94585">
+<ele>246</ele>
+<time>2025-08-28T07:04:41-07:00</time>
+</trkpt>
+<trkpt lat="-27.47566" lon="152.94592">
+<ele>246</ele>
+<time>2025-08-28T07:04:42-07:00</time>
+</trkpt>
+<trkpt lat="-27.47579" lon="152.94596">
+<ele>247</ele>
+<time>2025-08-28T07:04:43-07:00</time>
+</trkpt>
+<trkpt lat="-27.47584" lon="152.94601">
+<ele>247</ele>
+<time>2025-08-28T07:04:44-07:00</time>
+</trkpt>
+</trkseg>
+</trk>
+</gpx>
