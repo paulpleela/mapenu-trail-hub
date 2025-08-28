@@ -13,6 +13,11 @@ import tempfile
 import uuid
 import uvicorn
 import json
+from supabase import create_client, Client
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI()
 
@@ -24,6 +29,15 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+
+# Initialize Supabase client
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
+
+if not supabase_url or not supabase_key:
+    raise Exception("Missing Supabase credentials. Please check your .env file.")
+
+supabase: Client = create_client(supabase_url, supabase_key)
 
 
 # Use the same haversine function from main.py
@@ -60,25 +74,28 @@ def analyze_rolling_hills(elevations, distances):
     return normalized_index
 
 
-# Mock data store (replaced database integration)
-mock_trails = []
-
-
 @app.get("/trails")
 async def get_trails():
-    """Get all trails from mock storage"""
+    """Get all trails from Supabase database"""
     try:
-        return {"success": True, "trails": mock_trails}
+        response = supabase.table("trails").select("*").execute()
+        trails = response.data
+        return {"success": True, "trails": trails}
     except Exception as e:
+        print(f"Database error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/map")
 async def get_map():
-    """Generate map with all trails"""
+    """Generate map with all trails from Supabase"""
     try:
+        # Get trails from database
+        response = supabase.table("trails").select("*").execute()
+        trails = response.data
+
         # If no trails, return empty map
-        if not mock_trails:
+        if not trails:
             # Create empty map centered on Brisbane
             m = folium.Map(location=[-27.4698, 152.9560], zoom_start=12)
 
@@ -103,7 +120,7 @@ async def get_map():
         # Color palette for different trails
         colors = ["blue", "red", "green", "purple", "orange", "darkred", "lightred"]
 
-        for i, trail in enumerate(mock_trails):
+        for i, trail in enumerate(trails):
             color = colors[i % len(colors)]
             coordinates = trail.get("coordinates", [])
 
@@ -112,26 +129,29 @@ async def get_map():
                 folium.PolyLine(
                     coordinates,
                     color=color,
-                    weight=8,  # Increased thickness for easier clicking
-                    opacity=0.9,  # Increased opacity
-                    popup=f"<b>{trail.get('name', 'Unnamed Trail')}</b><br>Distance: {trail.get('distance', 0):.1f}km<br>Elevation Gain: {trail.get('elevation_gain', 0):.0f}m<br>Click for details",
-                    tooltip=f"{trail.get('name', 'Unnamed Trail')} - Click for details",
+                    weight=5,
+                    opacity=0.8,
+                    popup=f"{trail.get('name', 'Unnamed Trail')} - {trail.get('distance', 0):.1f}km",
                 ).add_to(m)
 
                 # Add start marker
-                if coordinates:
-                    start_coords = coordinates[0]
-                    folium.Marker(
-                        start_coords,
-                        popup=f"Start: {trail.get('name', 'Unnamed Trail')}",
-                        icon=folium.Icon(color="green", icon="play"),
-                        tooltip=f"Start of {trail.get('name', 'Unnamed Trail')}",
-                    ).add_to(m)
+                start_coord = coordinates[0]
+                folium.Marker(
+                    start_coord,
+                    popup=f"Start: {trail.get('name', 'Unnamed Trail')}",
+                    icon=folium.Icon(color="green", icon="play"),
+                ).add_to(m)
 
-        # Add JavaScript for handling trail clicks
-        js_code = f"""
-        <script>
-        // Store all trail data
+                # Add end marker
+                end_coord = coordinates[-1]
+                folium.Marker(
+                    end_coord,
+                    popup=f"End: {trail.get('name', 'Unnamed Trail')}",
+                    icon=folium.Icon(color="red", icon="stop"),
+                ).add_to(m)
+
+        # Add JavaScript for trail click handling
+        trail_data_js = f"""
         var allTrailsData = {json.dumps([{
             'id': trail.get('id'),
             'name': trail.get('name', 'Unnamed Trail'),
@@ -145,7 +165,7 @@ async def get_map():
             'difficultyLevel': trail.get('difficulty_level', 'Unknown'),
             'elevationProfile': trail.get('elevation_profile', []),
             'coordinates': trail.get('coordinates', [])
-        } for trail in mock_trails])};
+        } for trail in trails])};
         
         console.log('Trail data available:', allTrailsData.length, 'trails');
         allTrailsData.forEach(function(trail, index) {{
@@ -165,94 +185,44 @@ async def get_map():
         }}
         
         function setupClickHandlers() {{
-            console.log('Setting up click handlers for', allTrailsData.length, 'trails');
+            var polylines = document.querySelectorAll('.leaflet-interactive');
+            console.log('Found', polylines.length, 'interactive elements');
             
-            // Wait for Leaflet map to be ready
-            if (typeof window.map === 'undefined') {{
-                console.log('Map not ready yet, retrying...');
-                setTimeout(setupClickHandlers, 500);
-                return;
-            }}
-            
-            // Method 1: Try to find and attach to path elements with better timing
-            setTimeout(function() {{
-                var paths = document.querySelectorAll('path.leaflet-interactive');
-                console.log('Found', paths.length, 'interactive paths');
-                
-                // Also try other selectors
-                if (paths.length === 0) {{
-                    paths = document.querySelectorAll('path[stroke]');
-                    console.log('Found', paths.length, 'stroke paths as fallback');
-                }}
-                
-                paths.forEach(function(path, index) {{
-                    if (index < allTrailsData.length) {{
-                        path.addEventListener('click', function(e) {{
-                            console.log('Trail path clicked:', index, allTrailsData[index]);
-                            sendTrailDataToParent(allTrailsData[index]);
-                            e.preventDefault();
-                            e.stopPropagation();
-                            return false;
-                        }});
-                        path.style.cursor = 'pointer';
-                        path.style.strokeWidth = '8';
-                        path.style.stroke = path.style.stroke || 'red'; // Ensure visibility
-                        console.log('Added click handler to path', index, 'color:', path.style.stroke);
-                    }}
-                }});
-            }}, 2000); // Wait even longer for paths to be ready
-            
-            // Method 2: Map click handler with distance-based trail selection
-            if (window.map) {{
-                window.map.on('click', function(e) {{
-                    console.log('Map clicked at:', e.latlng);
-                    
-                    // Find closest trail to click point
-                    var clickedLat = e.latlng.lat;
-                    var clickedLng = e.latlng.lng;
-                    var closestTrail = null;
-                    var minDistance = Infinity;
-                    
-                    allTrailsData.forEach(function(trail) {{
-                        if (trail.coordinates && trail.coordinates.length > 0) {{
-                            trail.coordinates.forEach(function(coord) {{
-                                var distance = Math.sqrt(
-                                    Math.pow(coord[0] - clickedLat, 2) + 
-                                    Math.pow(coord[1] - clickedLng, 2)
-                                );
-                                if (distance < minDistance) {{
-                                    minDistance = distance;
-                                    closestTrail = trail;
-                                }}
-                            }});
-                        }}
-                    }});
-                    
-                    // If clicked reasonably close to a trail
-                    if (closestTrail && minDistance < 0.002) {{
-                        console.log('Sending closest trail data:', closestTrail);
-                        sendTrailDataToParent(closestTrail);
+            polylines.forEach(function(polyline, index) {{
+                polyline.style.cursor = 'pointer';
+                polyline.addEventListener('click', function(e) {{
+                    console.log('Polyline', index, 'clicked');
+                    if (allTrailsData[index]) {{
+                        sendTrailDataToParent(allTrailsData[index]);
                     }} else {{
-                        console.log('Click too far from trails, no trail selected');
+                        console.log('No trail data found for index', index);
                     }}
                 }});
-            }}
+            }});
         }}
         
-        // Start trying to set up click handlers
-        document.addEventListener('DOMContentLoaded', function() {{
-            console.log('DOM loaded, starting click handler setup');
+        // Setup click handlers when DOM is ready
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', function() {{
+                setTimeout(setupClickHandlers, 1000);
+            }});
+        }} else {{
             setTimeout(setupClickHandlers, 1000);
-        }});
-        
-        // Fallback - try again after longer delay
-        setTimeout(setupClickHandlers, 3000);
-        </script>
+        }}
         """
 
-        m.get_root().html.add_child(folium.Element(js_code))
+        # Add JavaScript to the map
+        m.get_root().html.add_child(
+            folium.Element(
+                f"""
+        <script>
+        {trail_data_js}
+        </script>
+        """
+            )
+        )
 
-        # Generate unique filename
+        # Generate unique filename and save map
         map_id = str(uuid.uuid4())
         map_filename = f"trails_map_{map_id}.html"
         map_path = os.path.join(tempfile.gettempdir(), map_filename)
@@ -263,15 +233,17 @@ async def get_map():
         return {
             "success": True,
             "map_url": f"/maps/{map_filename}",
-            "trails_count": len(mock_trails),
+            "trails_count": len(trails),
         }
+
     except Exception as e:
+        print(f"Map generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/upload-gpx")
 async def upload_gpx(file: UploadFile = File(...)):
-    """Handle GPX file upload and save to mock storage"""
+    """Handle GPX file upload and save to Supabase"""
     if not file.filename.lower().endswith(".gpx"):
         raise HTTPException(status_code=400, detail="File must be a GPX file")
 
@@ -349,15 +321,14 @@ async def upload_gpx(file: UploadFile = File(...)):
         else:
             difficulty_level = "Extreme"
 
-        # Create new trail
-        new_trail = {
-            "id": len(mock_trails) + 1,
+        # Create new trail data for Supabase
+        new_trail_data = {
             "name": trail_name,
             "distance": round(total_distance, 2),
-            "elevation_gain": round(elevation_gain, 0),
-            "elevation_loss": round(elevation_loss, 0),
-            "max_elevation": round(max_elevation, 0),
-            "min_elevation": round(min_elevation, 0),
+            "elevation_gain": int(round(elevation_gain, 0)),
+            "elevation_loss": int(round(elevation_loss, 0)),
+            "max_elevation": int(round(max_elevation, 0)),
+            "min_elevation": int(round(min_elevation, 0)),
             "rolling_hills_index": 0.5,  # simplified
             "difficulty_score": round(difficulty_score, 1),
             "difficulty_level": difficulty_level,
@@ -366,18 +337,25 @@ async def upload_gpx(file: UploadFile = File(...)):
                 {"distance": round(dist, 2), "elevation": round(ele, 1)}
                 for dist, ele in zip(distances, elevations)
             ],
-            "created_at": "2024-01-01T00:00:00Z",
         }
 
-        mock_trails.append(new_trail)
+        # Insert trail into Supabase database
+        response = supabase.table("trails").insert(new_trail_data).execute()
 
-        return {
-            "success": True,
-            "message": "Trail uploaded successfully",
-            "trail": new_trail,
-        }
+        if response.data:
+            inserted_trail = response.data[0]
+            return {
+                "success": True,
+                "message": "Trail uploaded successfully to database",
+                "trail": inserted_trail,
+            }
+        else:
+            raise HTTPException(
+                status_code=500, detail="Failed to insert trail into database"
+            )
 
     except Exception as e:
+        print(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
