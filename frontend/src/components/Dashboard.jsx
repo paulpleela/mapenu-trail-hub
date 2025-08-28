@@ -1,13 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import {
   LineChart,
   Line,
@@ -28,67 +21,23 @@ import {
   Gauge,
   Info,
   Upload,
+  RefreshCw,
+  Database,
 } from "lucide-react";
 
-// Mock trail data for Mt. Coot-tha
-const mockTrails = [
-  {
-    id: "mt-coot-tha",
-    name: "Mt. Coot-tha Summit Track",
-    location: "Brisbane, Queensland",
-    distance: 4.8,
-    elevationGain: 287,
-    elevationLoss: 15,
-    maxElevation: 287,
-    minElevation: 52,
-    difficulty: "Moderate",
-    difficultyScore: 6.8,
-    rollingHillsIndex: 0.73,
-    coordinates: [
-      { lat: -27.4698, lng: 152.956 },
-      { lat: -27.4705, lng: 152.9565 },
-      { lat: -27.4712, lng: 152.957 },
-    ],
-    elevationProfile: Array.from({ length: 48 }, (_, i) => ({
-      distance: (i * 0.1).toFixed(1),
-      elevation: Math.round(
-        52 + i * 5 + Math.sin(i * 0.5) * 15 + Math.random() * 8
-      ),
-      rollingIndex: parseFloat(
-        (0.5 + Math.sin(i * 0.3) * 0.3 + Math.random() * 0.2).toFixed(2)
-      ),
-    })),
-  },
-  {
-    id: "another-trail",
-    name: "Sample Trail 2",
-    location: "Queensland",
-    distance: 3.2,
-    elevationGain: 180,
-    elevationLoss: 25,
-    maxElevation: 210,
-    minElevation: 45,
-    difficulty: "Easy",
-    difficultyScore: 4.2,
-    rollingHillsIndex: 0.45,
-    elevationProfile: Array.from({ length: 32 }, (_, i) => ({
-      distance: (i * 0.1).toFixed(1),
-      elevation: Math.round(45 + i * 4 + Math.sin(i * 0.4) * 10),
-      rollingIndex: parseFloat((0.3 + Math.sin(i * 0.2) * 0.2).toFixed(2)),
-    })),
-  },
-];
+// API URL
+const API_BASE_URL = "http://localhost:8000";
 
-// Folium Map Component - uses real Folium maps from backend
-const FoliumMap = ({ selectedTrail, mapUrl, onMapLoad, onTrailClick }) => {
+// Folium Map Component - shows all trails
+const FoliumMap = ({ onTrailClick, trails }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [mapUrl, setMapUrl] = useState(null);
 
   // Listen for messages from the Folium iframe
-  React.useEffect(() => {
+  useEffect(() => {
     const handleMessage = (event) => {
-      // Accept messages from localhost
-      if (event.origin !== "http://localhost:8000") {
+      if (event.origin !== API_BASE_URL) {
         return;
       }
 
@@ -102,40 +51,33 @@ const FoliumMap = ({ selectedTrail, mapUrl, onMapLoad, onTrailClick }) => {
     return () => window.removeEventListener("message", handleMessage);
   }, [onTrailClick]);
 
-  // Load demo map on component mount if no map URL provided
-  React.useEffect(() => {
-    if (!mapUrl && !loading) {
-      loadDemoMap();
-    }
-  }, []);
+  // Load map when trails change
+  useEffect(() => {
+    loadMap();
+  }, [trails]);
 
-  const loadDemoMap = async () => {
+  const loadMap = async () => {
     setLoading(true);
     setError(null);
-    console.log("Attempting to load demo map from backend...");
 
     try {
-      const response = await fetch("http://localhost:8000/demo-map");
-      console.log("Response status:", response.status);
+      const response = await fetch(`${API_BASE_URL}/map`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log("Response data:", data);
 
       if (data.success) {
-        console.log("Map loaded successfully:", data.map_url);
-        onMapLoad(data.map_url, data.trail_stats);
+        setMapUrl(data.map_url);
       } else {
-        console.error("Backend error:", data.error);
-        setError(data.error || "Failed to load demo map");
+        setError(data.error || "Failed to load map");
       }
     } catch (err) {
-      console.error("Frontend error:", err);
+      console.error("Map loading error:", err);
       setError(
-        `Backend server not available: ${err.message}. Please ensure Flask server is running.`
+        `Unable to load map: ${err.message}. Please ensure the backend server is running.`
       );
     } finally {
       setLoading(false);
@@ -147,7 +89,7 @@ const FoliumMap = ({ selectedTrail, mapUrl, onMapLoad, onTrailClick }) => {
       <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-600">Generating Folium map...</p>
+          <p className="text-gray-600">Loading trail map...</p>
         </div>
       </div>
     );
@@ -164,8 +106,8 @@ const FoliumMap = ({ selectedTrail, mapUrl, onMapLoad, onTrailClick }) => {
             Map Error
           </h3>
           <p className="text-gray-600 text-sm mb-4">{error}</p>
-          <Button onClick={loadDemoMap} variant="outline">
-            Retry Demo Map
+          <Button onClick={loadMap} variant="outline">
+            Retry
           </Button>
         </div>
       </div>
@@ -176,11 +118,22 @@ const FoliumMap = ({ selectedTrail, mapUrl, onMapLoad, onTrailClick }) => {
     return (
       <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
         <div className="text-center">
-          <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">No map loaded</p>
-          <Button onClick={loadDemoMap} className="mt-2">
-            Load Demo Map
-          </Button>
+          {trails.length === 0 ? (
+            <>
+              <Database className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                No Trails Available
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Upload some GPX files to start analyzing trails!
+              </p>
+            </>
+          ) : (
+            <>
+              <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">Loading map...</p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -189,7 +142,7 @@ const FoliumMap = ({ selectedTrail, mapUrl, onMapLoad, onTrailClick }) => {
   return (
     <div className="w-full h-full rounded-lg overflow-hidden border">
       <iframe
-        src={`http://localhost:8000${mapUrl}`}
+        src={`${API_BASE_URL}${mapUrl}`}
         className="w-full h-full border-0"
         title="Trail Map"
         sandbox="allow-scripts allow-same-origin"
@@ -262,70 +215,164 @@ const StatCard = ({ icon: Icon, label, value, unit }) => (
 );
 
 export default function Dashboard() {
-  const [selectedTrailId, setSelectedTrailId] = useState("mt-coot-tha");
+  const [trails, setTrails] = useState([]);
+  const [selectedTrail, setSelectedTrail] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [mapUrl, setMapUrl] = useState(null);
-  const [realTrailStats, setRealTrailStats] = useState(null);
-  const [activeTrailData, setActiveTrailData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const selectedTrail = useMemo(() => {
-    // Use active trail data if available (from Folium click), otherwise use mock data
-    if (activeTrailData) {
-      return {
-        ...mockTrails.find((trail) => trail.id === selectedTrailId),
-        distance: activeTrailData.distance,
-        elevationGain: activeTrailData.elevationGain,
-        elevationLoss: activeTrailData.elevationLoss,
-        maxElevation: activeTrailData.maxElevation,
-        minElevation: activeTrailData.minElevation,
-        rollingHillsIndex: activeTrailData.rollingHillsIndex,
-        elevationProfile: activeTrailData.elevationProfile,
-      };
+  // Load trails on component mount
+  useEffect(() => {
+    loadTrails();
+  }, []);
+
+  const loadTrails = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/trails`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setTrails(data.trails);
+
+        // If no trails and demo data available, load demo
+        if (data.trails.length === 0) {
+          await loadDemoData();
+        }
+      } else {
+        setError(data.error || "Failed to load trails");
+      }
+    } catch (err) {
+      console.error("Failed to load trails:", err);
+      setError(
+        `Unable to connect to backend: ${err.message}. Please ensure the server is running.`
+      );
+    } finally {
+      setIsLoading(false);
     }
-    return mockTrails.find((trail) => trail.id === selectedTrailId);
-  }, [selectedTrailId, activeTrailData]);
+  };
 
-  // Handle map loading from Folium backend
-  const handleMapLoad = (url, stats) => {
-    setMapUrl(url);
-    setRealTrailStats(stats);
+  const loadDemoData = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/demo-data`);
+      const data = await response.json();
+
+      if (data.success && data.trail) {
+        // Reload trails to include the demo trail
+        await loadTrails();
+      }
+    } catch (err) {
+      console.log("No demo data available:", err);
+    }
   };
 
   // Handle trail click from Folium map
   const handleTrailClick = (trailData) => {
     console.log("Updating dashboard with trail data:", trailData);
-    setActiveTrailData(trailData);
+
+    // Find the trail in our database
+    const trail = trails.find((t) => t.id === trailData.id);
+    if (trail) {
+      setSelectedTrail(trail);
+    } else {
+      // Create a temporary trail object from the clicked data
+      setSelectedTrail({
+        id: trailData.id,
+        name: trailData.name,
+        distance: trailData.distance,
+        elevation_gain: trailData.elevationGain,
+        elevation_loss: trailData.elevationLoss,
+        max_elevation: trailData.maxElevation,
+        min_elevation: trailData.minElevation,
+        rolling_hills_index: trailData.rollingHillsIndex,
+        difficulty_score: trailData.difficultyScore,
+        difficulty_level: trailData.difficultyLevel,
+        elevation_profile: trailData.elevationProfile,
+      });
+    }
   };
 
   const handleGPXImport = async (event) => {
     const file = event.target.files[0];
+    console.log("File selected:", file);
+
     if (file && file.name.endsWith(".gpx")) {
+      console.log("Valid GPX file, starting upload...");
       setIsImporting(true);
 
       try {
         const formData = new FormData();
         formData.append("file", file);
 
-        const response = await fetch("http://localhost:8000/upload-gpx", {
+        console.log("Sending upload request...");
+        const response = await fetch(`${API_BASE_URL}/upload-gpx`, {
           method: "POST",
           body: formData,
         });
 
         const data = await response.json();
+        console.log("Upload response:", data);
 
         if (data.success) {
-          handleMapLoad(data.map_url, data.trail_stats);
-          // You could also create a new trail entry in mockTrails here
+          // Reload trails to include the new one
+          await loadTrails();
+          alert(`Trail "${data.trail.name}" uploaded successfully!`);
         } else {
-          alert("Error processing GPX file: " + data.error);
+          alert("Error processing GPX file: " + (data.detail || data.error));
         }
       } catch (error) {
+        console.error("Upload error:", error);
         alert("Error uploading GPX file: " + error.message);
       } finally {
         setIsImporting(false);
+        // Reset file input
+        event.target.value = "";
       }
+    } else if (file) {
+      alert("Please select a valid GPX file");
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            Loading Trails
+          </h2>
+          <p className="text-gray-600">Connecting to trail database...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md p-6">
+          <div className="text-red-500 mb-4">
+            <Database className="w-16 h-16 mx-auto" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            Connection Error
+          </h2>
+          <p className="text-gray-600 text-sm mb-4">{error}</p>
+          <Button onClick={loadTrails} className="mt-2">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -334,29 +381,15 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Trail Analysis
-              </h1>
+              <h1 className="text-2xl font-bold text-gray-900">Trail Hub</h1>
               <p className="text-gray-600">
-                Rolling Hills Detection & Trail Classification
+                Community Trail Analysis & Sharing Platform
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Select
-                value={selectedTrailId}
-                onValueChange={setSelectedTrailId}
-              >
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select a trail" />
-                </SelectTrigger>
-                <SelectContent>
-                  {mockTrails.map((trail) => (
-                    <SelectItem key={trail.id} value={trail.id}>
-                      {trail.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="text-sm text-gray-600">
+                {trails.length} trail{trails.length !== 1 ? "s" : ""} available
+              </div>
 
               {/* GPX Import Button */}
               <div className="relative">
@@ -364,19 +397,36 @@ export default function Dashboard() {
                   type="file"
                   accept=".gpx"
                   onChange={handleGPXImport}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  className="hidden"
                   id="gpx-upload"
+                  disabled={isImporting}
+                  ref={(input) => {
+                    if (input) {
+                      window.openFileDialog = () => {
+                        input.click();
+                      };
+                    }
+                  }}
                 />
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={isImporting}
-                  className="relative"
+                  className="inline-flex items-center"
+                  type="button"
+                  onClick={() => {
+                    document.getElementById("gpx-upload").click();
+                  }}
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {isImporting ? "Importing..." : "Import GPX"}
+                  {isImporting ? "Uploading..." : "Upload GPX"}
                 </Button>
               </div>
+
+              <Button onClick={loadTrails} variant="outline" size="sm">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
             </div>
           </div>
         </div>
@@ -384,158 +434,182 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto p-4 space-y-4">
         {/* Top Half - Map */}
-        <Card className="h-96">
+        <Card className="h-[600px]">
           <CardContent className="p-4 h-full">
-            <FoliumMap
-              selectedTrail={selectedTrail}
-              mapUrl={mapUrl}
-              onMapLoad={handleMapLoad}
-              onTrailClick={handleTrailClick}
-            />
+            <FoliumMap onTrailClick={handleTrailClick} trails={trails} />
           </CardContent>
         </Card>
 
         {/* Bottom Half - Trail Details */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Trail Info */}
+        {selectedTrail ? (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Trail Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="w-5 h-5" />
+                    Trail Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-lg">
+                      {selectedTrail?.name}
+                    </h3>
+                    <p className="text-gray-600">
+                      Uploaded{" "}
+                      {selectedTrail?.created_at
+                        ? new Date(
+                            selectedTrail.created_at
+                          ).toLocaleDateString()
+                        : "Recently"}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Difficulty</p>
+                      <p className="font-medium">
+                        {selectedTrail?.difficulty_level}
+                      </p>
+                    </div>
+                    <DifficultyRing
+                      score={selectedTrail?.difficulty_score}
+                      label="Score"
+                    />
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="w-4 h-4 text-blue-600" />
+                      <span className="font-medium">Rolling Hills Index</span>
+                      <Info className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div className="bg-gray-100 rounded-full h-3">
+                      <div
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full"
+                        style={{
+                          width: `${selectedTrail?.rolling_hills_index * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {(selectedTrail?.rolling_hills_index * 100).toFixed(1)}% -
+                      Rolling terrain intensity
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Elevation Profile */}
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Mountain className="w-5 h-5" />
+                    Elevation Profile
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={selectedTrail?.elevation_profile}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="distance"
+                          label={{
+                            value: "Distance (km)",
+                            position: "insideBottom",
+                            offset: -5,
+                          }}
+                        />
+                        <YAxis
+                          label={{
+                            value: "Elevation (m)",
+                            angle: -90,
+                            position: "insideLeft",
+                          }}
+                        />
+                        <Tooltip
+                          formatter={(value, name) => [
+                            `${value}${name === "elevation" ? "m" : ""}`,
+                            name === "elevation"
+                              ? "Elevation"
+                              : "Rolling Index",
+                          ]}
+                          labelFormatter={(label) => `Distance: ${label}km`}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="elevation"
+                          stroke="#2563eb"
+                          fill="#3b82f6"
+                          fillOpacity={0.3}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Trail Statistics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              <StatCard
+                icon={Ruler}
+                label="Distance"
+                value={selectedTrail?.distance}
+                unit="km"
+              />
+              <StatCard
+                icon={TrendingUp}
+                label="Elevation Gain"
+                value={selectedTrail?.elevation_gain}
+                unit="m"
+              />
+              <StatCard
+                icon={Mountain}
+                label="Max Elevation"
+                value={selectedTrail?.max_elevation}
+                unit="m"
+              />
+              <StatCard
+                icon={Gauge}
+                label="Avg Gradient"
+                value={(
+                  (selectedTrail?.elevation_gain /
+                    (selectedTrail?.distance * 1000)) *
+                  100
+                ).toFixed(1)}
+                unit="%"
+              />
+              <StatCard
+                icon={Activity}
+                label="Rolling Intensity"
+                value={(selectedTrail?.rolling_hills_index * 10).toFixed(1)}
+                unit="/10"
+              />
+              <StatCard
+                icon={MapPin}
+                label="Difficulty"
+                value={selectedTrail?.difficulty_level}
+                unit=""
+              />
+            </div>
+          </>
+        ) : (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Trail Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h3 className="font-semibold text-lg">{selectedTrail?.name}</h3>
-                <p className="text-gray-600">{selectedTrail?.location}</p>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Difficulty</p>
-                  <p className="font-medium">{selectedTrail?.difficulty}</p>
-                </div>
-                <DifficultyRing
-                  score={selectedTrail?.difficultyScore}
-                  label="Score"
-                />
-              </div>
-
-              <div className="pt-4 border-t">
-                <div className="flex items-center gap-2 mb-2">
-                  <Activity className="w-4 h-4 text-blue-600" />
-                  <span className="font-medium">Rolling Hills Index</span>
-                  <Info className="w-4 h-4 text-gray-400" />
-                </div>
-                <div className="bg-gray-100 rounded-full h-3">
-                  <div
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full"
-                    style={{
-                      width: `${selectedTrail?.rollingHillsIndex * 100}%`,
-                    }}
-                  />
-                </div>
-                <p className="text-sm text-gray-600 mt-1">
-                  {(selectedTrail?.rollingHillsIndex * 100).toFixed(1)}% -
-                  Rolling terrain intensity
-                </p>
-              </div>
+            <CardContent className="p-8 text-center">
+              <Mountain className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                Select a Trail
+              </h3>
+              <p className="text-gray-600">
+                Click on a trail in the map above to view its detailed analysis
+              </p>
             </CardContent>
           </Card>
-
-          {/* Elevation Profile */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Mountain className="w-5 h-5" />
-                Elevation Profile
-                {activeTrailData && (
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    Live Data
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={selectedTrail?.elevationProfile}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="distance"
-                      label={{
-                        value: "Distance (km)",
-                        position: "insideBottom",
-                        offset: -5,
-                      }}
-                    />
-                    <YAxis
-                      label={{
-                        value: "Elevation (m)",
-                        angle: -90,
-                        position: "insideLeft",
-                      }}
-                    />
-                    <Tooltip
-                      formatter={(value, name) => [
-                        `${value}${name === "elevation" ? "m" : ""}`,
-                        name === "elevation" ? "Elevation" : "Rolling Index",
-                      ]}
-                      labelFormatter={(label) => `Distance: ${label}km`}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="elevation"
-                      stroke="#2563eb"
-                      fill="#3b82f6"
-                      fillOpacity={0.3}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Trail Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <StatCard
-            icon={Ruler}
-            label="Distance"
-            value={selectedTrail?.distance}
-            unit="km"
-          />
-          <StatCard
-            icon={TrendingUp}
-            label="Elevation Gain"
-            value={selectedTrail?.elevationGain}
-            unit="m"
-          />
-          <StatCard
-            icon={Mountain}
-            label="Max Elevation"
-            value={selectedTrail?.maxElevation}
-            unit="m"
-          />
-          <StatCard
-            icon={Gauge}
-            label="Avg Gradient"
-            value={(
-              (selectedTrail?.elevationGain /
-                (selectedTrail?.distance * 1000)) *
-              100
-            ).toFixed(1)}
-            unit="%"
-          />
-          <StatCard
-            icon={Activity}
-            label="Rolling Intensity"
-            value={(selectedTrail?.rollingHillsIndex * 10).toFixed(1)}
-            unit="/10"
-          />
-          <StatCard icon={MapPin} label="Trail Type" value="Natural" unit="" />
-        </div>
+        )}
       </div>
     </div>
   );

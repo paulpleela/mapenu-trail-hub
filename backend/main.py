@@ -12,6 +12,7 @@ import os
 import tempfile
 import uuid
 import uvicorn
+import json
 
 app = FastAPI()
 
@@ -23,6 +24,7 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+
 
 # Use the same haversine function from main.py
 def haversine(lat1, lon1, lat2, lon2):
@@ -58,163 +60,218 @@ def analyze_rolling_hills(elevations, distances):
     return normalized_index
 
 
-def create_folium_map_from_gpx(gpx_content):
-    """Create a Folium map from GPX content"""
-    gpx = gpxpy.parse(gpx_content)
+# Mock data store (replaced database integration)
+mock_trails = []
 
-    coords = []
-    for track in gpx.tracks:
-        for segment in track.segments:
-            for point in segment.points:
-                coords.append((point.latitude, point.longitude, point.elevation or 0))
 
-    if not coords:
-        raise ValueError("No track points found in GPX file.")
+@app.get("/trails")
+async def get_trails():
+    """Get all trails from mock storage"""
+    try:
+        return {"success": True, "trails": mock_trails}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Calculate cumulative distance (in km)
-    distances = [0]
-    for i in range(1, len(coords)):
-        lat1, lon1, _ = coords[i - 1]
-        lat2, lon2, _ = coords[i]
-        distances.append(distances[-1] + haversine(lat1, lon1, lat2, lon2) / 1000)
 
-    elevations = [ele for _, _, ele in coords]
+@app.get("/map")
+async def get_map():
+    """Generate map with all trails"""
+    try:
+        # If no trails, return empty map
+        if not mock_trails:
+            # Create empty map centered on Brisbane
+            m = folium.Map(location=[-27.4698, 152.9560], zoom_start=12)
 
-    # Calculate rolling hills analysis
-    rolling_hills_index = analyze_rolling_hills(elevations, distances)
+            # Generate unique filename
+            map_id = str(uuid.uuid4())
+            map_filename = f"empty_map_{map_id}.html"
+            map_path = os.path.join(tempfile.gettempdir(), map_filename)
 
-    # Calculate trail statistics
-    total_distance = distances[-1]
-    elevation_gain = sum(
-        max(0, elevations[i] - elevations[i - 1]) for i in range(1, len(elevations))
-    )
-    elevation_loss = sum(
-        max(0, elevations[i - 1] - elevations[i]) for i in range(1, len(elevations))
-    )
-    max_elevation = max(elevations)
-    min_elevation = min(elevations)
+            # Save map to temporary file
+            m.save(map_path)
 
-    # Plot elevation profile with rolling hills analysis
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
+            return {
+                "success": True,
+                "map_url": f"/maps/{map_filename}",
+                "trails_count": 0,
+                "message": "No trails available. Upload GPX files to get started.",
+            }
 
-    # Elevation profile
-    ax1.plot(distances, elevations, color="green", linewidth=2)
-    ax1.set_xlabel("Distance (km)")
-    ax1.set_ylabel("Elevation (m)")
-    ax1.set_title("Elevation Profile")
-    ax1.grid(True, alpha=0.3)
-    ax1.fill_between(distances, elevations, alpha=0.3, color="green")
+        # Create a map centered on Brisbane for multiple trails
+        m = folium.Map(location=[-27.4698, 152.9560], zoom_start=12)
 
-    # Rolling hills analysis
-    elevation_changes = [0] + [
-        abs(elevations[i] - elevations[i - 1]) for i in range(1, len(elevations))
-    ]
-    ax2.bar(distances, elevation_changes, width=0.01, color="orange", alpha=0.7)
-    ax2.set_xlabel("Distance (km)")
-    ax2.set_ylabel("Elevation Change (m)")
-    ax2.set_title(f"Rolling Hills Analysis (Index: {rolling_hills_index:.2f})")
-    ax2.grid(True, alpha=0.3)
+        # Color palette for different trails
+        colors = ["blue", "red", "green", "purple", "orange", "darkred", "lightred"]
 
-    # Save plot to PNG in memory
-    buf = BytesIO()
-    plt.tight_layout()
-    plt.savefig(buf, format="png", bbox_inches="tight", dpi=100)
-    buf.seek(0)
-    encoded = base64.b64encode(buf.read()).decode("utf-8")
-    buf.close()
-    plt.close(fig)
+        for i, trail in enumerate(mock_trails):
+            color = colors[i % len(colors)]
+            coordinates = trail.get("coordinates", [])
 
-    # Create map
-    avg_lat = sum(lat for lat, lon, ele in coords) / len(coords)
-    avg_lon = sum(lon for lat, lon, ele in coords) / len(coords)
-    m = folium.Map(location=[avg_lat, avg_lon], zoom_start=14)
+            if coordinates:
+                # Add polyline for this trail
+                folium.PolyLine(
+                    coordinates,
+                    color=color,
+                    weight=8,  # Increased thickness for easier clicking
+                    opacity=0.9,  # Increased opacity
+                    popup=f"<b>{trail.get('name', 'Unnamed Trail')}</b><br>Distance: {trail.get('distance', 0):.1f}km<br>Elevation Gain: {trail.get('elevation_gain', 0):.0f}m<br>Click for details",
+                    tooltip=f"{trail.get('name', 'Unnamed Trail')} - Click for details",
+                ).add_to(m)
 
-    # Create JavaScript function to communicate with parent window
-    trail_data_js = f"""
-    var trailData = {{
-        distance: {total_distance:.2f},
-        elevationGain: {elevation_gain:.0f},
-        elevationLoss: {elevation_loss:.0f},
-        maxElevation: {max_elevation:.0f},
-        minElevation: {min_elevation:.0f},
-        rollingHillsIndex: {rolling_hills_index:.2f},
-        elevationProfile: {[{"distance": dist, "elevation": ele} for dist, (_, _, ele) in zip(distances, coords)]},
-        chartImage: "data:image/png;base64,{encoded}"
-    }};
-    
-    function sendTrailDataToParent() {{
-        if (window.parent && window.parent !== window) {{
-            window.parent.postMessage({{
-                type: 'trail-clicked',
-                data: trailData
-            }}, '*');
+                # Add start marker
+                if coordinates:
+                    start_coords = coordinates[0]
+                    folium.Marker(
+                        start_coords,
+                        popup=f"Start: {trail.get('name', 'Unnamed Trail')}",
+                        icon=folium.Icon(color="green", icon="play"),
+                        tooltip=f"Start of {trail.get('name', 'Unnamed Trail')}",
+                    ).add_to(m)
+
+        # Add JavaScript for handling trail clicks
+        js_code = f"""
+        <script>
+        // Store all trail data
+        var allTrailsData = {json.dumps([{
+            'id': trail.get('id'),
+            'name': trail.get('name', 'Unnamed Trail'),
+            'distance': trail.get('distance', 0),
+            'elevationGain': trail.get('elevation_gain', 0),
+            'elevationLoss': trail.get('elevation_loss', 0),
+            'maxElevation': trail.get('max_elevation', 0),
+            'minElevation': trail.get('min_elevation', 0),
+            'rollingHillsIndex': trail.get('rolling_hills_index', 0),
+            'difficultyScore': trail.get('difficulty_score', 0),
+            'difficultyLevel': trail.get('difficulty_level', 'Unknown'),
+            'elevationProfile': trail.get('elevation_profile', []),
+            'coordinates': trail.get('coordinates', [])
+        } for trail in mock_trails])};
+        
+        console.log('Trail data available:', allTrailsData.length, 'trails');
+        allTrailsData.forEach(function(trail, index) {{
+            console.log('Trail', index + ':', trail.name, '- ID:', trail.id);
+        }});
+        
+        function sendTrailDataToParent(trailData) {{
+            console.log('Sending trail data to parent:', trailData);
+            if (window.parent && window.parent !== window) {{
+                window.parent.postMessage({{
+                    type: 'trail-clicked',
+                    data: trailData
+                }}, '*');
+            }} else {{
+                console.log('No parent window found - running in standalone mode');
+            }}
         }}
-    }}
-    """
+        
+        function setupClickHandlers() {{
+            console.log('Setting up click handlers for', allTrailsData.length, 'trails');
+            
+            // Wait for Leaflet map to be ready
+            if (typeof window.map === 'undefined') {{
+                console.log('Map not ready yet, retrying...');
+                setTimeout(setupClickHandlers, 500);
+                return;
+            }}
+            
+            // Method 1: Try to find and attach to path elements with better timing
+            setTimeout(function() {{
+                var paths = document.querySelectorAll('path.leaflet-interactive');
+                console.log('Found', paths.length, 'interactive paths');
+                
+                // Also try other selectors
+                if (paths.length === 0) {{
+                    paths = document.querySelectorAll('path[stroke]');
+                    console.log('Found', paths.length, 'stroke paths as fallback');
+                }}
+                
+                paths.forEach(function(path, index) {{
+                    if (index < allTrailsData.length) {{
+                        path.addEventListener('click', function(e) {{
+                            console.log('Trail path clicked:', index, allTrailsData[index]);
+                            sendTrailDataToParent(allTrailsData[index]);
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return false;
+                        }});
+                        path.style.cursor = 'pointer';
+                        path.style.strokeWidth = '8';
+                        path.style.stroke = path.style.stroke || 'red'; // Ensure visibility
+                        console.log('Added click handler to path', index, 'color:', path.style.stroke);
+                    }}
+                }});
+            }}, 2000); // Wait even longer for paths to be ready
+            
+            // Method 2: Map click handler with distance-based trail selection
+            if (window.map) {{
+                window.map.on('click', function(e) {{
+                    console.log('Map clicked at:', e.latlng);
+                    
+                    // Find closest trail to click point
+                    var clickedLat = e.latlng.lat;
+                    var clickedLng = e.latlng.lng;
+                    var closestTrail = null;
+                    var minDistance = Infinity;
+                    
+                    allTrailsData.forEach(function(trail) {{
+                        if (trail.coordinates && trail.coordinates.length > 0) {{
+                            trail.coordinates.forEach(function(coord) {{
+                                var distance = Math.sqrt(
+                                    Math.pow(coord[0] - clickedLat, 2) + 
+                                    Math.pow(coord[1] - clickedLng, 2)
+                                );
+                                if (distance < minDistance) {{
+                                    minDistance = distance;
+                                    closestTrail = trail;
+                                }}
+                            }});
+                        }}
+                    }});
+                    
+                    // If clicked reasonably close to a trail
+                    if (closestTrail && minDistance < 0.002) {{
+                        console.log('Sending closest trail data:', closestTrail);
+                        sendTrailDataToParent(closestTrail);
+                    }} else {{
+                        console.log('Click too far from trails, no trail selected');
+                    }}
+                }});
+            }}
+        }}
+        
+        // Start trying to set up click handlers
+        document.addEventListener('DOMContentLoaded', function() {{
+            console.log('DOM loaded, starting click handler setup');
+            setTimeout(setupClickHandlers, 1000);
+        }});
+        
+        // Fallback - try again after longer delay
+        setTimeout(setupClickHandlers, 3000);
+        </script>
+        """
 
-    # Add polyline with click event instead of popup
-    folium.PolyLine(
-        [(lat, lon) for lat, lon, ele in coords],
-        color="blue",
-        weight=4,
-        opacity=0.8,
-    ).add_to(m)
+        m.get_root().html.add_child(folium.Element(js_code))
 
-    # Add JavaScript to the map
-    m.get_root().html.add_child(
-        folium.Element(
-            f"""
-    <script>
-    {trail_data_js}
-    
-    // Add click event to the polyline after map loads
-    document.addEventListener('DOMContentLoaded', function() {{
-        // Wait for Leaflet to be ready
-        setTimeout(function() {{
-            // Find all polylines and add click event
-            var polylines = document.querySelectorAll('.leaflet-interactive');
-            polylines.forEach(function(polyline) {{
-                polyline.addEventListener('click', sendTrailDataToParent);
-                polyline.style.cursor = 'pointer';
-            }});
-        }}, 1000);
-    }});
-    </script>
-    """
-        )
-    )
+        # Generate unique filename
+        map_id = str(uuid.uuid4())
+        map_filename = f"trails_map_{map_id}.html"
+        map_path = os.path.join(tempfile.gettempdir(), map_filename)
 
-    # Add start and end markers
-    if coords:
-        start_lat, start_lon, start_ele = coords[0]
-        end_lat, end_lon, end_ele = coords[-1]
+        # Save map to temporary file
+        m.save(map_path)
 
-        folium.Marker(
-            [start_lat, start_lon],
-            popup=f"Start: {start_ele:.0f}m",
-            icon=folium.Icon(color="green", icon="play"),
-        ).add_to(m)
-
-        folium.Marker(
-            [end_lat, end_lon],
-            popup=f"Finish: {end_ele:.0f}m",
-            icon=folium.Icon(color="red", icon="stop"),
-        ).add_to(m)
-
-    return m, {
-        "distance": total_distance,
-        "elevation_gain": elevation_gain,
-        "elevation_loss": elevation_loss,
-        "max_elevation": max_elevation,
-        "min_elevation": min_elevation,
-        "rolling_hills_index": rolling_hills_index,
-        "coords": coords,
-    }
+        return {
+            "success": True,
+            "map_url": f"/maps/{map_filename}",
+            "trails_count": len(mock_trails),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/upload-gpx")
 async def upload_gpx(file: UploadFile = File(...)):
-    """Handle GPX file upload and return map HTML"""
+    """Handle GPX file upload and save to mock storage"""
     if not file.filename.lower().endswith(".gpx"):
         raise HTTPException(status_code=400, detail="File must be a GPX file")
 
@@ -223,21 +280,101 @@ async def upload_gpx(file: UploadFile = File(...)):
         content = await file.read()
         gpx_content = content.decode("utf-8")
 
-        # Create Folium map
-        folium_map, trail_stats = create_folium_map_from_gpx(gpx_content)
+        # Extract trail name from filename
+        trail_name = file.filename.replace(".gpx", "").replace("_", " ").title()
 
-        # Generate unique filename
-        map_id = str(uuid.uuid4())
-        map_filename = f"trail_map_{map_id}.html"
-        map_path = os.path.join(tempfile.gettempdir(), map_filename)
+        # Analyze trail data
+        gpx = gpxpy.parse(gpx_content)
+        coords = []
+        elevations = []
+        distances = [0]
 
-        # Save map to temporary file
-        folium_map.save(map_path)
+        for track in gpx.tracks:
+            for segment in track.segments:
+                for i, point in enumerate(segment.points):
+                    coords.append([point.latitude, point.longitude])
+                    elevations.append(point.elevation or 0)
+
+                    if i > 0:
+                        prev_point = segment.points[i - 1]
+                        dist = (
+                            haversine(
+                                prev_point.latitude,
+                                prev_point.longitude,
+                                point.latitude,
+                                point.longitude,
+                            )
+                            / 1000
+                        )
+                        distances.append(distances[-1] + dist)
+
+        if not coords:
+            raise HTTPException(
+                status_code=400, detail="No track points found in GPX file"
+            )
+
+        # Calculate statistics
+        total_distance = distances[-1] if len(distances) > 1 else 0
+        elevation_gain = (
+            sum(
+                max(0, elevations[i] - elevations[i - 1])
+                for i in range(1, len(elevations))
+            )
+            if len(elevations) > 1
+            else 0
+        )
+        elevation_loss = (
+            sum(
+                max(0, elevations[i - 1] - elevations[i])
+                for i in range(1, len(elevations))
+            )
+            if len(elevations) > 1
+            else 0
+        )
+        max_elevation = max(elevations) if elevations else 0
+        min_elevation = min(elevations) if elevations else 0
+
+        # Simple difficulty calculation
+        distance_factor = min(total_distance / 10, 1) * 3
+        elevation_factor = min(elevation_gain / 1000, 1) * 4
+        rolling_factor = 0.5 * 3  # simplified rolling hills
+        difficulty_score = distance_factor + elevation_factor + rolling_factor
+
+        if difficulty_score <= 3:
+            difficulty_level = "Easy"
+        elif difficulty_score <= 6:
+            difficulty_level = "Moderate"
+        elif difficulty_score <= 8:
+            difficulty_level = "Hard"
+        else:
+            difficulty_level = "Extreme"
+
+        # Create new trail
+        new_trail = {
+            "id": len(mock_trails) + 1,
+            "name": trail_name,
+            "distance": round(total_distance, 2),
+            "elevation_gain": round(elevation_gain, 0),
+            "elevation_loss": round(elevation_loss, 0),
+            "max_elevation": round(max_elevation, 0),
+            "min_elevation": round(min_elevation, 0),
+            "rolling_hills_index": 0.5,  # simplified
+            "difficulty_score": round(difficulty_score, 1),
+            "difficulty_level": difficulty_level,
+            "coordinates": coords,
+            "elevation_profile": [
+                {"distance": round(dist, 2), "elevation": round(ele, 1)}
+                for dist, ele in zip(distances, elevations)
+            ],
+            "created_at": "2024-01-01T00:00:00Z",
+        }
+
+        mock_trails.append(new_trail)
 
         return {
             "success": True,
-            "map_url": f"/maps/{map_filename}",
-            "trail_stats": trail_stats,
+            "message": "Trail uploaded successfully",
+            "trail": new_trail,
         }
 
     except Exception as e:
@@ -251,47 +388,6 @@ async def serve_map(filename: str):
     if not os.path.exists(map_path):
         raise HTTPException(status_code=404, detail="Map file not found")
     return FileResponse(map_path)
-
-
-@app.get("/demo-map")
-async def demo_map():
-    """Create a demo map for testing"""
-    try:
-        # Use the existing GPX file if available
-        gpx_path = "./data/43-mt-coot-tha-summit-track.gpx"
-
-        if os.path.exists(gpx_path):
-            with open(gpx_path, "r") as f:
-                gpx_content = f.read()
-
-            folium_map, trail_stats = create_folium_map_from_gpx(gpx_content)
-
-            # Generate unique filename
-            map_id = str(uuid.uuid4())
-            map_filename = f"demo_map_{map_id}.html"
-            map_path = os.path.join(tempfile.gettempdir(), map_filename)
-
-            # Save map
-            folium_map.save(map_path)
-
-            response_data = {
-                "success": True,
-                "map_url": f"/maps/{map_filename}",
-                "trail_stats": trail_stats,
-            }
-            print(f"Returning response: {response_data}")
-            return response_data
-        else:
-            error_msg = f"Demo GPX file not found at {os.path.abspath(gpx_path)}"
-            print(error_msg)
-            raise HTTPException(status_code=404, detail=error_msg)
-
-    except Exception as e:
-        error_msg = f"Error creating demo map: {str(e)}"
-        import traceback
-
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=error_msg)
 
 
 if __name__ == "__main__":
