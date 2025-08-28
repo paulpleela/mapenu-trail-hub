@@ -218,6 +218,7 @@ export default function Dashboard() {
   const [trails, setTrails] = useState([]);
   const [selectedTrail, setSelectedTrail] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -321,9 +322,17 @@ export default function Dashboard() {
         console.log("Upload response:", data);
 
         if (data.success) {
-          // Reload trails to include the new one
-          await loadTrails();
           console.log(`Trail "${data.trail.name}" uploaded successfully!`);
+
+          // Cool loading effect - show processing state
+          setIsImporting(false);
+          setIsProcessing(true);
+
+          // Wait a moment for visual effect, then reload trails
+          setTimeout(async () => {
+            await loadTrails();
+            setIsProcessing(false);
+          }, 1000); // 1 second loading effect
         } else {
           console.error(
             "Error processing GPX file:",
@@ -333,7 +342,10 @@ export default function Dashboard() {
       } catch (error) {
         console.error("Upload error:", error);
       } finally {
-        setIsImporting(false);
+        // Only reset importing state if there was an error
+        if (!data?.success) {
+          setIsImporting(false);
+        }
         // Reset file input
         event.target.value = "";
       }
@@ -401,7 +413,7 @@ export default function Dashboard() {
                   onChange={handleGPXImport}
                   className="hidden"
                   id="gpx-upload"
-                  disabled={isImporting}
+                  disabled={isImporting || isProcessing}
                   ref={(input) => {
                     if (input) {
                       window.openFileDialog = () => {
@@ -413,7 +425,7 @@ export default function Dashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={isImporting}
+                  disabled={isImporting || isProcessing}
                   className="inline-flex items-center"
                   type="button"
                   onClick={() => {
@@ -421,7 +433,11 @@ export default function Dashboard() {
                   }}
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {isImporting ? "Uploading..." : "Upload GPX"}
+                  {isImporting
+                    ? "Uploading..."
+                    : isProcessing
+                    ? "Processing..."
+                    : "Upload GPX"}
                 </Button>
               </div>
 
