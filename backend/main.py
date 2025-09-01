@@ -54,24 +54,227 @@ def haversine(lat1, lon1, lat2, lon2):
 
 
 def analyze_rolling_hills(elevations, distances):
-    """Analyze rolling hills characteristics"""
+    """Advanced rolling hills analysis: counts and scores significant ascents/descents"""
     if len(elevations) < 3:
         return 0.0
 
-    # Calculate elevation changes
+    threshold = 5  # meters, what counts as a 'hill'
+    significant_changes = []
+    for i in range(1, len(elevations)):
+        change = elevations[i] - elevations[i - 1]
+        if abs(change) >= threshold:
+            significant_changes.append(abs(change))
+
+    # Frequency: how many significant hills per km
+    total_distance = distances[-1] if distances else 1
+    hills_per_km = len(significant_changes) / total_distance if total_distance > 0 else 0
+
+    # Amplitude: average size of significant hills
+    avg_hill_size = sum(significant_changes) / len(significant_changes) if significant_changes else 0
+
+    # Composite index: weighted sum (tweak weights as needed)
+    rolling_index = 0.6 * hills_per_km + 0.4 * (avg_hill_size / 20)
+
+    # Normalize to 0-1 scale
+    normalized_index = min(rolling_index, 1.0)
+    return normalized_index
+
+
+def calculate_trail_similarity(trail1, trail2):
+    """Calculate similarity score between two trails (0-1, higher = more similar)"""
+    # Normalize factors for comparison
+    distance_diff = abs(trail1['distance'] - trail2['distance'])
+    distance_similarity = max(0, 1 - (distance_diff / 10))  # Within 10km is very similar
+    
+    elevation_gain_diff = abs(trail1['elevation_gain'] - trail2['elevation_gain'])
+    elevation_similarity = max(0, 1 - (elevation_gain_diff / 500))  # Within 500m is similar
+    
+    difficulty_diff = abs(trail1['difficulty_score'] - trail2['difficulty_score'])
+    difficulty_similarity = max(0, 1 - (difficulty_diff / 5))  # Within 5 points is similar
+    
+    rolling_hills_diff = abs(trail1['rolling_hills_index'] - trail2['rolling_hills_index'])
+    rolling_similarity = max(0, 1 - (rolling_hills_diff / 0.5))  # Within 0.5 is similar
+    
+    # Weighted average (adjust weights as needed)
+    similarity = (
+        distance_similarity * 0.3 +
+        elevation_similarity * 0.3 +
+        difficulty_similarity * 0.25 +
+        rolling_similarity * 0.15
+    )
+    
+    return similarity
+
+
+def get_trail_weather_exposure(trail):
+    """Calculate static weather exposure risk (doesn't change with weather)"""
+    max_elev = trail.get('max_elevation', 0)
+    
+    # Return exposure level and explanation (static characteristics)
+    if max_elev > 1500:
+        return {
+            "exposure_level": "High",
+            "risk_factors": ["Rapid weather changes", "Snow/ice risk", "High wind exposure", "Temperature drops"]
+        }
+    elif max_elev > 1000:
+        return {
+            "exposure_level": "Moderate", 
+            "risk_factors": ["Cooler temperatures", "Wind exposure", "Potential fog"]
+        }
+    elif max_elev > 500:
+        return {
+            "exposure_level": "Low-Moderate",
+            "risk_factors": ["Slightly cooler temps", "Some wind exposure"]
+        }
+    else:
+        return {
+            "exposure_level": "Low",
+            "risk_factors": ["Minimal weather impact", "Protected terrain"]
+        }
+
+
+async def get_live_weather_difficulty(trail_coords, weather_api_key=None):
+    """Get current weather conditions and calculate live difficulty multiplier"""
+    if not trail_coords:
+        return {
+            "multiplier": 1.0,
+            "conditions": "No coordinates available",
+            "explanation": "Trail coordinates required for weather data"
+        }
+    
+    # For demo purposes, simulate different conditions
+    # In production, this would call OpenWeatherMap or similar API
+    import random
+    
+    # Simulate current conditions (in real app, call weather API)
+    conditions = random.choice([
+        {"temp": 15, "wind": 10, "rain": False, "visibility": "Good"},
+        {"temp": 5, "wind": 25, "rain": True, "visibility": "Poor"},
+        {"temp": 25, "wind": 5, "rain": False, "visibility": "Excellent"},
+        {"temp": -2, "wind": 30, "rain": False, "visibility": "Fair"},
+        {"temp": 18, "wind": 15, "rain": False, "visibility": "Good"},
+        {"temp": 12, "wind": 8, "rain": False, "visibility": "Excellent"}
+    ])
+    
+    multiplier = 1.0
+    factors = []
+    
+    # Temperature impact
+    if conditions["temp"] < 0:
+        multiplier += 0.3
+        factors.append("Freezing temperatures")
+    elif conditions["temp"] < 5:
+        multiplier += 0.2
+        factors.append("Cold temperatures")
+    elif conditions["temp"] > 30:
+        multiplier += 0.1
+        factors.append("Hot temperatures")
+    
+    # Wind impact
+    if conditions["wind"] > 25:
+        multiplier += 0.2
+        factors.append("Strong winds")
+    elif conditions["wind"] > 15:
+        multiplier += 0.1
+        factors.append("Moderate winds")
+    
+    # Rain impact
+    if conditions["rain"]:
+        multiplier += 0.3
+        factors.append("Wet/slippery conditions")
+    
+    # Visibility impact
+    if conditions["visibility"] == "Poor":
+        multiplier += 0.2
+        factors.append("Poor visibility")
+    
+    condition_desc = f"{conditions['temp']}°C, {conditions['wind']}km/h winds"
+    if conditions["rain"]:
+        condition_desc += ", raining"
+    
+    return {
+        "multiplier": round(multiplier, 2),
+        "conditions": condition_desc,
+        "explanation": f"Weather factors: {', '.join(factors) if factors else 'Good conditions'}"
+    }
+
+
+def calculate_terrain_variety(elevations):
+    """Calculate how varied the terrain is (0-10 scale)"""
+    if len(elevations) < 10:
+        return 0
+    
+    # Calculate elevation ranges in 100m bands
+    elevation_bands = set()
+    for elev in elevations:
+        band = int(elev / 100) * 100  # Round to nearest 100m
+        elevation_bands.add(band)
+    
+    # More bands = more variety
+    variety_score = min(len(elevation_bands), 10)  # Cap at 10
+    
+    # Also consider elevation change rate
     elevation_changes = []
     for i in range(1, len(elevations)):
-        change = abs(elevations[i] - elevations[i - 1])
-        elevation_changes.append(change)
+        change_rate = abs(elevations[i] - elevations[i-1])
+        elevation_changes.append(change_rate)
+    
+    # Bonus for frequent elevation changes
+    if elevation_changes:
+        avg_change = sum(elevation_changes) / len(elevation_changes)
+        if avg_change > 20:  # Frequent significant changes
+            variety_score = min(variety_score + 2, 10)
+        elif avg_change > 10:  # Moderate changes
+            variety_score = min(variety_score + 1, 10)
+    
+    return variety_score
 
-    # Calculate rolling hills index (average change per distance unit)
-    total_distance = distances[-1] if distances else 1
-    total_elevation_change = sum(elevation_changes)
-    rolling_index = total_elevation_change / total_distance if total_distance > 0 else 0
 
-    # Normalize to 0-1 scale (adjust based on your data)
-    normalized_index = min(rolling_index / 100, 1.0)
-    return normalized_index
+def get_terrain_variety_description(score):
+    """Get a description for terrain variety score"""
+    if score >= 8:
+        return "Highly varied terrain with multiple elevation zones"
+    elif score >= 6:
+        return "Good terrain variety with several elevation changes"
+    elif score >= 4:
+        return "Moderate terrain variety with some elevation changes"
+    elif score >= 2:
+        return "Limited terrain variety, mostly consistent elevation"
+    else:
+        return "Flat or very consistent terrain"
+
+
+def get_weather_exposure_from_score(score):
+    """Convert weather score back to exposure level and risk factors"""
+    # Handle None/null values
+    if score is None:
+        score = 1.0  # Default to low exposure
+    
+    try:
+        score = float(score)  # Ensure it's a number
+    except (ValueError, TypeError):
+        score = 1.0  # Default to low exposure if conversion fails
+    
+    if score >= 1.25:
+        return {
+            "exposure_level": "High",
+            "risk_factors": ["Rapid weather changes", "Snow/ice risk", "High wind exposure", "Temperature drops"]
+        }
+    elif score >= 1.15:
+        return {
+            "exposure_level": "Moderate",
+            "risk_factors": ["Cooler temperatures", "Wind exposure", "Potential fog"]
+        }
+    elif score >= 1.05:
+        return {
+            "exposure_level": "Low-Moderate",
+            "risk_factors": ["Slightly cooler temps", "Some wind exposure"]
+        }
+    else:
+        return {
+            "exposure_level": "Low",
+            "risk_factors": ["Minimal weather impact", "Protected terrain"]
+        }
 
 
 @app.get("/trails")
@@ -83,6 +286,163 @@ async def get_trails():
         return {"success": True, "trails": trails}
     except Exception as e:
         print(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/trail/{trail_id}/similar")
+async def get_similar_trails(trail_id: int, limit: int = 5):
+    """Get trails similar to the specified trail"""
+    try:
+        # Get the target trail
+        target_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        if not target_response.data:
+            raise HTTPException(status_code=404, detail="Trail not found")
+        
+        target_trail = target_response.data[0]
+        
+        # Get all other trails
+        all_trails_response = supabase.table("trails").select("*").neq("id", trail_id).execute()
+        all_trails = all_trails_response.data
+        
+        # Calculate similarity scores
+        similarities = []
+        for trail in all_trails:
+            similarity_score = calculate_trail_similarity(target_trail, trail)
+            similarities.append({
+                "trail": trail,
+                "similarity_score": similarity_score
+            })
+        
+        # Sort by similarity and return top results
+        similarities.sort(key=lambda x: x["similarity_score"], reverse=True)
+        similar_trails = similarities[:limit]
+        
+        return {
+            "success": True,
+            "target_trail": target_trail["name"],
+            "similar_trails": similar_trails
+        }
+        
+    except Exception as e:
+        print(f"Similar trails error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/overview")
+async def get_analytics_overview():
+    """Get overall analytics for all trails"""
+    try:
+        response = supabase.table("trails").select("*").execute()
+        trails = response.data
+        
+        if not trails:
+            return {"success": True, "analytics": {"total_trails": 0}}
+        
+        # Calculate aggregate statistics
+        total_distance = sum(trail.get('distance', 0) for trail in trails)
+        total_elevation_gain = sum(trail.get('elevation_gain', 0) for trail in trails)
+        avg_difficulty = sum(trail.get('difficulty_score', 0) for trail in trails) / len(trails)
+        
+        # Difficulty distribution
+        difficulty_dist = {"Easy": 0, "Moderate": 0, "Hard": 0, "Extreme": 0}
+        for trail in trails:
+            level = trail.get('difficulty_level', 'Unknown')
+            if level in difficulty_dist:
+                difficulty_dist[level] += 1
+        
+        # Distance categories
+        distance_categories = {"Short (<5km)": 0, "Medium (5-15km)": 0, "Long (>15km)": 0}
+        for trail in trails:
+            distance = trail.get('distance', 0)
+            if distance < 5:
+                distance_categories["Short (<5km)"] += 1
+            elif distance <= 15:
+                distance_categories["Medium (5-15km)"] += 1
+            else:
+                distance_categories["Long (>15km)"] += 1
+        
+        return {
+            "success": True,
+            "analytics": {
+                "total_trails": len(trails),
+                "total_distance_km": round(total_distance, 1),
+                "total_elevation_gain_m": round(total_elevation_gain, 0),
+                "avg_difficulty_score": round(avg_difficulty, 1),
+                "difficulty_distribution": difficulty_dist,
+                "distance_categories": distance_categories,
+                "most_challenging": max(trails, key=lambda t: t.get('difficulty_score', 0))['name'],
+                "longest_trail": max(trails, key=lambda t: t.get('distance', 0))['name']
+            }
+        }
+        
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/trail/{trail_id}/weather")
+async def get_trail_weather(trail_id: int):
+    """Get live weather conditions and difficulty multiplier for a trail"""
+    try:
+        print(f"Getting weather data for trail ID: {trail_id}")
+        
+        # Get the trail
+        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        if not trail_response.data:
+            raise HTTPException(status_code=404, detail="Trail not found")
+        
+        trail = trail_response.data[0]
+        print(f"Found trail: {trail.get('name', 'Unknown')}")
+        
+        coordinates = trail.get("coordinates", [])
+        
+        if not coordinates:
+            raise HTTPException(status_code=400, detail="Trail has no coordinate data")
+        
+        # Get midpoint coordinates for weather lookup
+        mid_index = len(coordinates) // 2
+        trail_coords = coordinates[mid_index]
+        print(f"Using coordinates: {trail_coords}")
+        
+        # Get live weather data (this would use a real weather API in production)
+        weather_data = await get_live_weather_difficulty(trail_coords)
+        print(f"Weather data: {weather_data}")
+        
+        # Get static weather exposure info from stored score
+        weather_score = trail.get("weather_difficulty_multiplier")
+        if weather_score is None:
+            weather_score = 1.0  # Default value
+        weather_exposure = get_weather_exposure_from_score(weather_score)
+        
+        # Safe difficulty calculation
+        base_difficulty = trail.get("difficulty_score", 0)
+        if base_difficulty is None:
+            base_difficulty = 0
+        
+        weather_multiplier = weather_data.get("multiplier", 1.0)
+        if weather_multiplier is None:
+            weather_multiplier = 1.0
+        
+        result = {
+            "success": True,
+            "trail_name": trail.get("name", "Unknown Trail"),
+            "live_weather": weather_data,
+            "weather_exposure": weather_exposure,
+            "coordinates": trail_coords,
+            "updated_difficulty": {
+                "base_difficulty": base_difficulty,
+                "weather_adjusted": round(base_difficulty * weather_multiplier, 1),
+                "adjustment_explanation": f"Difficulty adjusted by {weather_multiplier}x due to current conditions"
+            }
+        }
+        
+        print(f"Returning result: {result}")
+        return result
+        
+    except Exception as e:
+        print(f"Weather lookup error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -260,6 +620,7 @@ async def upload_gpx(file: UploadFile = File(...)):
         coords = []
         elevations = []
         distances = [0]
+        slopes = [0]  # Start with 0 slope for first point
 
         for track in gpx.tracks:
             for segment in track.segments:
@@ -279,6 +640,20 @@ async def upload_gpx(file: UploadFile = File(...)):
                             / 1000
                         )
                         distances.append(distances[-1] + dist)
+
+                        # Slope analysis (gradient in %)
+                        elev_diff = (point.elevation or 0) - (prev_point.elevation or 0)
+                        dist_m = haversine(
+                            prev_point.latitude,
+                            prev_point.longitude,
+                            point.latitude,
+                            point.longitude,
+                        )
+                        if dist_m > 0:
+                            gradient = (elev_diff / dist_m) * 100
+                            slopes.append(gradient)
+                        else:
+                            slopes.append(0)
 
         if not coords:
             raise HTTPException(
@@ -306,10 +681,49 @@ async def upload_gpx(file: UploadFile = File(...)):
         max_elevation = max(elevations) if elevations else 0
         min_elevation = min(elevations) if elevations else 0
 
+        # Rolling hills index (advanced)
+        rolling_hills_index = round(analyze_rolling_hills(elevations, distances), 2)
+
+        # Slope analysis
+        if slopes and len(slopes) > 1:  # Skip first element (always 0)
+            slope_values = slopes[1:]  # Skip the initial 0
+            max_slope = max(slope_values) if slope_values else 0
+            avg_slope = sum(map(abs, slope_values)) / len(slope_values) if slope_values else 0
+        else:
+            max_slope = 0
+            avg_slope = 0
+
+        # Segment analysis (500m segments)
+        segment_length = 0.5  # km
+        segments = []
+        if len(distances) > 1:
+            seg_start_idx = 0
+            while seg_start_idx < len(distances) - 1:
+                seg_end_idx = seg_start_idx
+                # Find the end index for this segment
+                while (seg_end_idx < len(distances) - 1 and
+                       distances[seg_end_idx] - distances[seg_start_idx] < segment_length):
+                    seg_end_idx += 1
+                # Calculate stats for this segment
+                seg_dist = distances[seg_end_idx] - distances[seg_start_idx]
+                seg_elev_change = elevations[seg_end_idx] - elevations[seg_start_idx]
+                # Slope for segment
+                if seg_dist > 0:
+                    seg_slope = (seg_elev_change / (seg_dist * 1000)) * 100
+                else:
+                    seg_slope = 0
+                segments.append({
+                    "start_distance": round(distances[seg_start_idx], 2),
+                    "end_distance": round(distances[seg_end_idx], 2),
+                    "elevation_change": round(seg_elev_change, 1),
+                    "avg_slope": round(seg_slope, 2)
+                })
+                seg_start_idx = seg_end_idx
+
         # Simple difficulty calculation
         distance_factor = min(total_distance / 10, 1) * 3
         elevation_factor = min(elevation_gain / 1000, 1) * 4
-        rolling_factor = 0.5 * 3  # simplified rolling hills
+        rolling_factor = rolling_hills_index * 3
         difficulty_score = distance_factor + elevation_factor + rolling_factor
 
         if difficulty_score <= 3:
@@ -358,6 +772,13 @@ async def upload_gpx(file: UploadFile = File(...)):
                     )
 
         # Create new trail data for Supabase
+        weather_exposure = get_trail_weather_exposure({"max_elevation": max_elevation})
+        terrain_variety = calculate_terrain_variety(elevations)
+        
+        # Convert weather exposure to a numeric score for database compatibility
+        exposure_scores = {"Low": 1.0, "Low-Moderate": 1.1, "Moderate": 1.2, "High": 1.3}
+        weather_score = exposure_scores.get(weather_exposure["exposure_level"], 1.0)
+        
         new_trail_data = {
             "name": trail_name,
             "distance": round(total_distance, 2),
@@ -365,14 +786,29 @@ async def upload_gpx(file: UploadFile = File(...)):
             "elevation_loss": int(round(elevation_loss, 0)),
             "max_elevation": int(round(max_elevation, 0)),
             "min_elevation": int(round(min_elevation, 0)),
-            "rolling_hills_index": 0.5,  # simplified
+            "rolling_hills_index": rolling_hills_index,
             "difficulty_score": round(difficulty_score, 1),
             "difficulty_level": difficulty_level,
             "coordinates": coords,
             "elevation_profile": [
-                {"distance": round(dist, 2), "elevation": round(ele, 1)}
-                for dist, ele in zip(distances, elevations)
+                {
+                    "distance": round(dist, 2), 
+                    "elevation": round(ele, 1),
+                    "slope": round(slopes[i] if i < len(slopes) else 0, 2)
+                }
+                for i, (dist, ele) in enumerate(zip(distances, elevations))
             ],
+            "max_slope": round(max_slope, 2),
+            "avg_slope": round(avg_slope, 2),
+            "segments": segments,
+            # Enhanced effort estimation using Naismith's Rule + terrain adjustments
+            "estimated_time_hours": round((total_distance / 5) + (elevation_gain / 600) + (rolling_hills_index * 0.5), 2),
+            # Improved analytics fields (using existing column names)
+            "terrain_variety_score": terrain_variety,
+            "elevation_change_total": int(round(elevation_gain + elevation_loss, 0)),
+            # Store weather data in existing numeric fields, we'll interpret on frontend
+            "weather_difficulty_multiplier": weather_score,  # Use existing column with new meaning
+            "technical_rating": min(10, int(max_slope / 10 + rolling_hills_index * 5 + 1)),  # 1-10 technical difficulty
         }
 
         # Insert trail into Supabase database
