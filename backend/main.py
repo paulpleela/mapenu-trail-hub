@@ -23,7 +23,7 @@ load_dotenv()
 # Import real DEM analysis
 try:
     from real_dem_analysis import RealDEMAnalyzer
-    dem_path = r"C:\Users\paudo\OneDrive\Documents\MAPENU\backend\data\QLD Government\DEM\1 Metre"
+    dem_path = "data/QLD Government/DEM/1 Metre"
     dem_analyzer = RealDEMAnalyzer(dem_path)
     print(f"DEM Analyzer initialized with {len(dem_analyzer.dem_files)} DEM files")
 except ImportError as e:
@@ -1253,65 +1253,7 @@ async def get_trail_dem_overlay_map(trail_id: int):
     except Exception as e:
         print(f"DEM overlay map error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    """Get information about available DEM coverage"""
-    try:
-        if not dem_analyzer:
-            return {
-                "success": False,
-                "error": "DEM analyzer not available",
-                "troubleshooting": {
-                    "check_path": r"C:\Users\paudo\OneDrive\Documents\MAPENU\backend\data\QLD Government\DEM\1 Metre",
-                    "required_packages": ["rasterio", "geopandas", "pyproj"],
-                    "file_format": ".tif files"
-                }
-            }
-        
-        # Get actual file information
-        dem_files = dem_analyzer.dem_files
-        total_size_mb = 0
-        
-        file_info = []
-        for dem_file in dem_files[:10]:  # Show first 10 files as examples
-            try:
-                size_mb = os.path.getsize(dem_file) / (1024 * 1024)
-                total_size_mb += size_mb
-                
-                # Extract coordinate info from filename
-                filename = os.path.basename(dem_file)
-                file_info.append({
-                    "filename": filename,
-                    "size_mb": round(size_mb, 2),
-                    "path": dem_file
-                })
-            except:
-                continue
-        
-        # Estimate total size for all files
-        if len(dem_files) > 10:
-            avg_size = total_size_mb / len(file_info) if file_info else 50
-            estimated_total_mb = avg_size * len(dem_files)
-        else:
-            estimated_total_mb = total_size_mb
-        
-        coverage_info = {
-            "available": True,
-            "total_files": len(dem_files),
-            "resolution": "1 meter",
-            "format": "GeoTIFF (.tif)",
-            "coordinate_system": "GDA94 / MGA Zone 56 (EPSG:28356)",
-            "coverage_area": "Brisbane Region",
-            "years_available": ["2009", "2014", "2019"],
-            "estimated_size_gb": round(estimated_total_mb / 1024, 2),
-            "sample_files": file_info,
-            "data_path": dem_analyzer.dem_base_path
-        }
-        
-        return {"success": True, "coverage": coverage_info}
-        
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
+    
 @app.get("/dem/coverage")
 async def get_dem_coverage():
     """Get information about available DEM coverage"""
@@ -1321,7 +1263,7 @@ async def get_dem_coverage():
                 "success": False,
                 "error": "DEM analyzer not available",
                 "troubleshooting": {
-                    "check_path": r"C:\Users\paudo\OneDrive\Documents\MAPENU\backend\data\QLD Government\DEM\1 Metre",
+                    "check_path": "backend/data/QLD Government/DEM/1 Metre",
                     "required_packages": ["rasterio", "geopandas", "pyproj"],
                     "file_format": ".tif files"
                 }
