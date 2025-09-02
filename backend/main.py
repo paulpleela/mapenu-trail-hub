@@ -23,7 +23,7 @@ load_dotenv()
 # Import real DEM analysis
 try:
     from real_dem_analysis import RealDEMAnalyzer
-    dem_path = "data/QLD Government/DEM/1 Metre"
+    dem_path = os.path.join(os.path.dirname(__file__), "data", "QLD Government", "DEM", "1 Metre")
     dem_analyzer = RealDEMAnalyzer(dem_path)
     print(f"DEM Analyzer initialized with {len(dem_analyzer.dem_files)} DEM files")
 except ImportError as e:
