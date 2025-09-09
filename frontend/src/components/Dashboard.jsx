@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Database,
 } from "lucide-react";
+import DEM3DViewer from "./DEM3DViewer";
 
 // API URL
 const API_BASE_URL = "http://localhost:8000";
@@ -35,12 +36,16 @@ const getTerrainVarietyDescription = (score) => {
   if (score === null || score === undefined || isNaN(score)) {
     return "Terrain variety data not available";
   }
-  
+
   const numScore = Number(score);
-  if (numScore >= 8) return "Highly varied terrain with multiple elevation zones";
-  if (numScore >= 6) return "Good terrain variety with several elevation changes";
-  if (numScore >= 4) return "Moderate terrain variety with some elevation changes";
-  if (numScore >= 2) return "Limited terrain variety, mostly consistent elevation";
+  if (numScore >= 8)
+    return "Highly varied terrain with multiple elevation zones";
+  if (numScore >= 6)
+    return "Good terrain variety with several elevation changes";
+  if (numScore >= 4)
+    return "Moderate terrain variety with some elevation changes";
+  if (numScore >= 2)
+    return "Limited terrain variety, mostly consistent elevation";
   return "Flat or very consistent terrain";
 };
 
@@ -48,28 +53,31 @@ const getTerrainVarietyDescription = (score) => {
 const getWeatherExposureFromScore = (score) => {
   // Handle null, undefined, or invalid values
   if (score === null || score === undefined || isNaN(score)) {
-    return { 
-      level: "Unknown", 
-      factors: ["Weather exposure data not available"] 
+    return {
+      level: "Unknown",
+      factors: ["Weather exposure data not available"],
     };
   }
-  
+
   const numScore = Number(score);
-  if (numScore >= 1.25) return { 
-    level: "High", 
-    factors: ["Rapid weather changes", "Snow/ice risk", "High wind exposure"] 
-  };
-  if (numScore >= 1.15) return { 
-    level: "Moderate", 
-    factors: ["Cooler temperatures", "Wind exposure", "Potential fog"] 
-  };
-  if (numScore >= 1.05) return { 
-    level: "Low-Moderate", 
-    factors: ["Slightly cooler temps", "Some wind exposure"] 
-  };
-  return { 
-    level: "Low", 
-    factors: ["Minimal weather impact", "Protected terrain"] 
+  if (numScore >= 1.25)
+    return {
+      level: "High",
+      factors: ["Rapid weather changes", "Snow/ice risk", "High wind exposure"],
+    };
+  if (numScore >= 1.15)
+    return {
+      level: "Moderate",
+      factors: ["Cooler temperatures", "Wind exposure", "Potential fog"],
+    };
+  if (numScore >= 1.05)
+    return {
+      level: "Low-Moderate",
+      factors: ["Slightly cooler temps", "Some wind exposure"],
+    };
+  return {
+    level: "Low",
+    factors: ["Minimal weather impact", "Protected terrain"],
   };
 };
 
@@ -569,9 +577,9 @@ export default function Dashboard() {
                 Refresh
               </Button>
 
-              <Button 
-                onClick={() => setShowAnalytics(!showAnalytics)} 
-                variant={showAnalytics ? "default" : "outline"} 
+              <Button
+                onClick={() => setShowAnalytics(!showAnalytics)}
+                variant={showAnalytics ? "default" : "outline"}
                 size="sm"
               >
                 <TrendingUp className="w-4 h-4 mr-2" />
@@ -623,26 +631,53 @@ export default function Dashboard() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white rounded-xl p-4 shadow-sm">
-                  <h4 className="font-semibold text-gray-800 mb-4">Difficulty Distribution</h4>
+                  <h4 className="font-semibold text-gray-800 mb-4">
+                    Difficulty Distribution
+                  </h4>
                   <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={Object.entries(analytics.difficulty_distribution).map(([level, count]) => ({level, count}))}>
+                    <BarChart
+                      data={Object.entries(
+                        analytics.difficulty_distribution
+                      ).map(([level, count]) => ({ level, count }))}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="level" stroke="#64748b" fontSize={12} />
                       <YAxis stroke="#64748b" fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar
+                        dataKey="count"
+                        fill="#3b82f6"
+                        radius={[4, 4, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="bg-white rounded-xl p-4 shadow-sm">
-                  <h4 className="font-semibold text-gray-800 mb-4">Distance Categories</h4>
+                  <h4 className="font-semibold text-gray-800 mb-4">
+                    Distance Categories
+                  </h4>
                   <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={Object.entries(analytics.distance_categories).map(([category, count]) => ({category: category.replace(/[<>()]/g, ''), count}))}>
+                    <BarChart
+                      data={Object.entries(analytics.distance_categories).map(
+                        ([category, count]) => ({
+                          category: category.replace(/[<>()]/g, ""),
+                          count,
+                        })
+                      )}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="category" stroke="#64748b" fontSize={12} />
+                      <XAxis
+                        dataKey="category"
+                        stroke="#64748b"
+                        fontSize={12}
+                      />
                       <YAxis stroke="#64748b" fontSize={12} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      <Bar
+                        dataKey="count"
+                        fill="#10b981"
+                        radius={[4, 4, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -650,11 +685,17 @@ export default function Dashboard() {
               <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <h5 className="font-semibold text-gray-800">🏔️ Most Challenging</h5>
-                    <p className="text-gray-600">{analytics.most_challenging}</p>
+                    <h5 className="font-semibold text-gray-800">
+                      🏔️ Most Challenging
+                    </h5>
+                    <p className="text-gray-600">
+                      {analytics.most_challenging}
+                    </p>
                   </div>
                   <div>
-                    <h5 className="font-semibold text-gray-800">📏 Longest Trail</h5>
+                    <h5 className="font-semibold text-gray-800">
+                      📏 Longest Trail
+                    </h5>
                     <p className="text-gray-600">{analytics.longest_trail}</p>
                   </div>
                 </div>
@@ -701,7 +742,9 @@ export default function Dashboard() {
 
                   <div className="flex items-center justify-between bg-white rounded-xl p-4 shadow-sm">
                     <div>
-                      <p className="text-sm font-medium text-gray-500 mb-1">Difficulty Level</p>
+                      <p className="text-sm font-medium text-gray-500 mb-1">
+                        Difficulty Level
+                      </p>
                       <p className="text-xl font-bold text-gray-800">
                         {selectedTrail?.difficulty_level}
                       </p>
@@ -715,7 +758,9 @@ export default function Dashboard() {
                   <div className="bg-white rounded-xl p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
                       <Activity className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-gray-800">Rolling Hills Index</span>
+                      <span className="font-semibold text-gray-800">
+                        Rolling Hills Index
+                      </span>
                     </div>
                     <div className="bg-gray-200 rounded-full h-4 mb-2">
                       <div
@@ -726,320 +771,415 @@ export default function Dashboard() {
                       />
                     </div>
                     <p className="text-sm text-gray-600 font-medium">
-                      {(selectedTrail?.rolling_hills_index * 100).toFixed(1)}% terrain intensity
+                      {(selectedTrail?.rolling_hills_index * 100).toFixed(1)}%
+                      terrain intensity
                     </p>
                   </div>
                 </CardContent>
               </Card>
 
               {/* Elevation Profile */}
-                  <Card className="lg:col-span-2 shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-                    <CardHeader className="pb-4">
-                      <CardTitle className="flex items-center gap-3 text-xl">
-                        <div className="p-3 bg-green-100 rounded-xl">
-                          <Mountain className="w-6 h-6 text-green-600" />
-                        </div>
-                        Elevation Profile
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
-                        <div className="h-80">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={selectedTrail?.elevation_profile}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                              <XAxis
-                                dataKey="distance"
-                                label={{
-                                  value: "Distance (km)",
-                                  position: "insideBottom",
-                                  offset: -5,
-                                }}
-                                stroke="#64748b"
-                                fontSize={12}
+              <Card className="lg:col-span-2 shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
+                <CardHeader className="pb-4">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <div className="p-3 bg-green-100 rounded-xl">
+                      <Mountain className="w-6 h-6 text-green-600" />
+                    </div>
+                    Elevation Profile
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={selectedTrail?.elevation_profile}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#f1f5f9"
+                          />
+                          <XAxis
+                            dataKey="distance"
+                            label={{
+                              value: "Distance (km)",
+                              position: "insideBottom",
+                              offset: -5,
+                            }}
+                            stroke="#64748b"
+                            fontSize={12}
+                          />
+                          <YAxis
+                            yAxisId="left"
+                            label={{
+                              value: "Elevation (m)",
+                              angle: -90,
+                              position: "insideLeft",
+                            }}
+                            stroke="#64748b"
+                            fontSize={12}
+                          />
+                          <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            label={{
+                              value: "Slope (%)",
+                              angle: 90,
+                              position: "insideRight",
+                            }}
+                            stroke="#f59e0b"
+                            fontSize={12}
+                          />
+                          <Tooltip
+                            formatter={(value, name) => [
+                              `${value}${
+                                name === "elevation"
+                                  ? "m"
+                                  : name === "slope"
+                                  ? "%"
+                                  : ""
+                              }`,
+                              name === "elevation"
+                                ? "Elevation"
+                                : name === "slope"
+                                ? "Slope"
+                                : name,
+                            ]}
+                            labelFormatter={(label) => `Distance: ${label}km`}
+                            contentStyle={{
+                              backgroundColor: "#1f2937",
+                              color: "#f9fafb",
+                              border: "none",
+                              borderRadius: "12px",
+                              boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                            }}
+                          />
+                          <Area
+                            yAxisId="left"
+                            type="monotone"
+                            dataKey="elevation"
+                            stroke="#3b82f6"
+                            fill="url(#elevationGradient)"
+                            strokeWidth={3}
+                          />
+                          <Line
+                            yAxisId="right"
+                            type="monotone"
+                            dataKey="slope"
+                            stroke="#f59e0b"
+                            strokeWidth={2}
+                            dot={false}
+                            name="Slope"
+                          />
+                          <defs>
+                            <linearGradient
+                              id="elevationGradient"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="5%"
+                                stopColor="#3b82f6"
+                                stopOpacity={0.4}
                               />
-                              <YAxis
-                                yAxisId="left"
-                                label={{
-                                  value: "Elevation (m)",
-                                  angle: -90,
-                                  position: "insideLeft",
-                                }}
-                                stroke="#64748b"
-                                fontSize={12}
+                              <stop
+                                offset="95%"
+                                stopColor="#3b82f6"
+                                stopOpacity={0.1}
                               />
-                              <YAxis
-                                yAxisId="right"
-                                orientation="right"
-                                label={{
-                                  value: "Slope (%)",
-                                  angle: 90,
-                                  position: "insideRight",
-                                }}
-                                stroke="#f59e0b"
-                                fontSize={12}
-                              />
-                              <Tooltip
-                                formatter={(value, name) => [
-                                  `${value}${name === "elevation" ? "m" : name === "slope" ? "%" : ""}`,
-                                  name === "elevation"
-                                    ? "Elevation"
-                                    : name === "slope" 
-                                    ? "Slope"
-                                    : name,
-                                ]}
-                                labelFormatter={(label) => `Distance: ${label}km`}
-                                contentStyle={{
-                                  backgroundColor: '#1f2937',
-                                  color: '#f9fafb',
-                                  border: 'none',
-                                  borderRadius: '12px',
-                                  boxShadow: '0 10px 25px rgba(0,0,0,0.15)'
-                                }}
-                              />
-                              <Area
-                                yAxisId="left"
-                                type="monotone"
-                                dataKey="elevation"
-                                stroke="#3b82f6"
-                                fill="url(#elevationGradient)"
-                                strokeWidth={3}
-                              />
-                              <Line
-                                yAxisId="right"
-                                type="monotone"
-                                dataKey="slope"
-                                stroke="#f59e0b"
-                                strokeWidth={2}
-                                dot={false}
-                                name="Slope"
-                              />
-                              <defs>
-                                <linearGradient id="elevationGradient" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                                </linearGradient>
-                              </defs>
-                              {/* Min/Max elevation reference lines */}
-                              {selectedTrail?.max_elevation && (
-                                <Line
-                                  yAxisId="left"
-                                  type="step"
-                                  dataKey={() => selectedTrail.max_elevation}
-                                  stroke="#ef4444"
-                                  strokeDasharray="8 4"
-                                  strokeWidth={2}
-                                  dot={false}
-                                  name="Max Elevation"
-                                />
-                              )}
-                              {selectedTrail?.min_elevation && (
-                                <Line
-                                  yAxisId="left"
-                                  type="step"
-                                  dataKey={() => selectedTrail.min_elevation}
-                                  stroke="#22c55e"
-                                  strokeDasharray="8 4"
-                                  strokeWidth={2}
-                                  dot={false}
-                                  name="Min Elevation"
-                                />
-                              )}
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                      {/* Elevation Stats */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <StatCard
-                          icon={TrendingUp}
-                          label="Elevation Gain"
-                          value={selectedTrail?.elevation_gain}
-                          unit="m"
-                          tooltip="Total upward elevation change throughout the trail"
-                        />
-                        <StatCard
-                          icon={TrendingUp}
-                          label="Elevation Loss"
-                          value={selectedTrail?.elevation_loss}
-                          unit="m"
-                          tooltip="Total downward elevation change throughout the trail"
-                        />
-                        <StatCard
-                          icon={Mountain}
-                          label="Elevation Range"
-                          value={`${selectedTrail?.min_elevation}m - ${selectedTrail?.max_elevation}m`}
-                          unit=""
-                          description={`${selectedTrail?.max_elevation - selectedTrail?.min_elevation}m span`}
-                          tooltip="Minimum to maximum elevation with total elevation span"
-                        />
-                        <StatCard
-                          icon={Gauge}
-                          label="Slope Range"
-                          value={`${selectedTrail?.avg_slope?.toFixed(1)}% avg`}
-                          unit=""
-                          description={`${selectedTrail?.max_slope?.toFixed(1)}% max`}
-                          tooltip="Average slope with maximum slope encountered - yellow line shows slope variation"
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+                            </linearGradient>
+                          </defs>
+                          {/* Min/Max elevation reference lines */}
+                          {selectedTrail?.max_elevation && (
+                            <Line
+                              yAxisId="left"
+                              type="step"
+                              dataKey={() => selectedTrail.max_elevation}
+                              stroke="#ef4444"
+                              strokeDasharray="8 4"
+                              strokeWidth={2}
+                              dot={false}
+                              name="Max Elevation"
+                            />
+                          )}
+                          {selectedTrail?.min_elevation && (
+                            <Line
+                              yAxisId="left"
+                              type="step"
+                              dataKey={() => selectedTrail.min_elevation}
+                              stroke="#22c55e"
+                              strokeDasharray="8 4"
+                              strokeWidth={2}
+                              dot={false}
+                              name="Min Elevation"
+                            />
+                          )}
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  {/* Elevation Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <StatCard
+                      icon={TrendingUp}
+                      label="Elevation Gain"
+                      value={selectedTrail?.elevation_gain}
+                      unit="m"
+                      tooltip="Total upward elevation change throughout the trail"
+                    />
+                    <StatCard
+                      icon={TrendingUp}
+                      label="Elevation Loss"
+                      value={selectedTrail?.elevation_loss}
+                      unit="m"
+                      tooltip="Total downward elevation change throughout the trail"
+                    />
+                    <StatCard
+                      icon={Mountain}
+                      label="Elevation Range"
+                      value={`${selectedTrail?.min_elevation}m - ${selectedTrail?.max_elevation}m`}
+                      unit=""
+                      description={`${
+                        selectedTrail?.max_elevation -
+                        selectedTrail?.min_elevation
+                      }m span`}
+                      tooltip="Minimum to maximum elevation with total elevation span"
+                    />
+                    <StatCard
+                      icon={Gauge}
+                      label="Slope Range"
+                      value={`${selectedTrail?.avg_slope?.toFixed(1)}% avg`}
+                      unit=""
+                      description={`${selectedTrail?.max_slope?.toFixed(
+                        1
+                      )}% max`}
+                      tooltip="Average slope with maximum slope encountered - yellow line shows slope variation"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
-            {/* Trail Statistics */}
-                  {/* Terrain Difficulty */}
-                  <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-                    <CardHeader className="pb-4">
-                      <CardTitle className="flex items-center gap-3 text-xl">
-                        <div className="p-3 bg-purple-100 rounded-xl">
-                          <Activity className="w-6 h-6 text-purple-600" />
-                        </div>
-                        Trail Metrics
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <StatCard
-                          icon={Ruler}
-                          label="Distance"
-                          value={selectedTrail?.distance}
-                          unit="km"
-                          tooltip="Total trail distance measured from GPS track"
-                        />
-                        <StatCard
-                          icon={Info}
-                          label="Est. Time"
-                          value={selectedTrail?.estimated_time_hours}
-                          unit="hrs"
-                          tooltip="Estimated completion time using Naismith's Rule + terrain adjustments"
-                        />
-                        <StatCard
-                          icon={Activity}
-                          label="Rolling Intensity"
-                          value={(selectedTrail?.rolling_hills_index * 10).toFixed(1)}
-                          unit="/10"
-                          tooltip="How much the trail goes up and down - higher = more tiring"
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+            {/* 3D DEM Visualization */}
+            <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="p-3 bg-indigo-100 rounded-xl">
+                    <Mountain className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  3D Terrain Visualization
+                </CardTitle>
+                <p className="text-gray-600 text-sm mt-2">
+                  Interactive 3D view of the trail overlaid on high-resolution
+                  terrain data
+                </p>
+              </CardHeader>
+              <CardContent>
+                <DEM3DViewer
+                  trailId={selectedTrail?.id}
+                  isVisible={!!selectedTrail}
+                />
+                <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+                  <p className="font-medium mb-1">📍 Data Source:</p>
+                  <p>
+                    Queensland Government 1-meter resolution Digital Elevation
+                    Model (LiDAR)
+                  </p>
+                  <p className="mt-2">
+                    <span className="inline-block w-3 h-1 bg-red-500 mr-2"></span>
+                    Trail path overlaid on terrain surface
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-              {/* Trail Insights Section */}
-              {selectedTrail && (
-                <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-3 text-xl">
-                      <div className="p-3 bg-emerald-100 rounded-xl">
-                        <Info className="w-6 h-6 text-emerald-600" />
-                      </div>
-                      Trail Insights
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Live Weather Impact Box */}
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Info className="w-5 h-5 text-blue-600" />
-                          <h4 className="font-semibold text-gray-800">Current Weather Impact</h4>
-                          {weatherData && (
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold">
-                              Live
-                            </span>
-                          )}
-                          {selectedTrail?.id && (
-                            <button
-                              onClick={() => loadWeatherData(selectedTrail.id)}
-                              className="ml-auto p-1 hover:bg-blue-200 rounded text-blue-600"
-                              title="Refresh weather data"
-                            >
-                              <RefreshCw className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                        {weatherData ? (
-                          <>
-                            <p className="text-sm text-gray-700 mb-2">
-                              <strong>Conditions:</strong> {weatherData.live_weather.conditions}
-                            </p>
-                            <p className="text-sm text-gray-700 mb-2">
-                              <strong>Difficulty Multiplier:</strong> {weatherData.live_weather.multiplier}x
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              {weatherData.live_weather.explanation}
-                            </p>
-                            {weatherData.updated_difficulty && (
-                              <div className="mt-2 p-2 bg-blue-100 rounded text-xs">
-                                <strong>Adjusted Difficulty:</strong> {weatherData.updated_difficulty.base_difficulty} → {weatherData.updated_difficulty.weather_adjusted}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-sm text-gray-700 mb-2">
-                              <strong>Exposure Level:</strong> {getWeatherExposureFromScore(selectedTrail?.weather_difficulty_multiplier).level}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Risk factors: {getWeatherExposureFromScore(selectedTrail?.weather_difficulty_multiplier).factors.join(', ')}
-                            </p>
-                          </>
+            {/* Trail Statistics */}
+            {/* Terrain Difficulty */}
+            <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="p-3 bg-purple-100 rounded-xl">
+                    <Activity className="w-6 h-6 text-purple-600" />
+                  </div>
+                  Trail Metrics
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <StatCard
+                    icon={Ruler}
+                    label="Distance"
+                    value={selectedTrail?.distance}
+                    unit="km"
+                    tooltip="Total trail distance measured from GPS track"
+                  />
+                  <StatCard
+                    icon={Info}
+                    label="Est. Time"
+                    value={selectedTrail?.estimated_time_hours}
+                    unit="hrs"
+                    tooltip="Estimated completion time using Naismith's Rule + terrain adjustments"
+                  />
+                  <StatCard
+                    icon={Activity}
+                    label="Rolling Intensity"
+                    value={(selectedTrail?.rolling_hills_index * 10).toFixed(1)}
+                    unit="/10"
+                    tooltip="How much the trail goes up and down - higher = more tiring"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Trail Insights Section */}
+            {selectedTrail && (
+              <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
+                <CardHeader className="pb-4">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <div className="p-3 bg-emerald-100 rounded-xl">
+                      <Info className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    Trail Insights
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Live Weather Impact Box */}
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Info className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-semibold text-gray-800">
+                          Current Weather Impact
+                        </h4>
+                        {weatherData && (
+                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold">
+                            Live
+                          </span>
+                        )}
+                        {selectedTrail?.id && (
+                          <button
+                            onClick={() => loadWeatherData(selectedTrail.id)}
+                            className="ml-auto p-1 hover:bg-blue-200 rounded text-blue-600"
+                            title="Refresh weather data"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
                         )}
                       </div>
-
-                      {/* Terrain Analysis Box */}
-                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Mountain className="w-5 h-5 text-green-600" />
-                          <h4 className="font-semibold text-gray-800">Terrain Analysis</h4>
-                        </div>
-                        <p className="text-sm text-gray-700 mb-2">
-                          <strong>Variety Score:</strong> {selectedTrail?.terrain_variety_score}/10
-                        </p>
-                        <p className="text-sm text-gray-700 mb-2">
-                          <strong>Total Elevation Change:</strong> {selectedTrail?.elevation_change_total}m
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {getTerrainVarietyDescription(selectedTrail?.terrain_variety_score)}
-                        </p>
-                      </div>
-
-                      {/* Effort Analysis Box */}
-                      <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Gauge className="w-5 h-5 text-orange-600" />
-                          <h4 className="font-semibold text-gray-800">Effort Estimation</h4>
-                        </div>
-                        <p className="text-sm text-gray-700 mb-2">
-                          <strong>Estimated Time:</strong> {selectedTrail?.estimated_time_hours} hours
-                        </p>
-                        <p className="text-sm text-gray-700 mb-2">
-                          <strong>Rolling Intensity:</strong> {(selectedTrail?.rolling_hills_index * 10).toFixed(1)}/10
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Based on Naismith's Rule: 5km/h + 1h per 600m elevation gain, adjusted for terrain complexity
-                        </p>
-                      </div>
-
-                      {/* Technical Difficulty Box */}
-                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Activity className="w-5 h-5 text-purple-600" />
-                          <h4 className="font-semibold text-gray-800">Technical Difficulty</h4>
-                        </div>
-                        <p className="text-sm text-gray-700 mb-2">
-                          <strong>Technical Rating:</strong> {selectedTrail?.technical_rating}/10
-                        </p>
-                        <p className="text-sm text-gray-700 mb-2">
-                          <strong>Max Slope:</strong> {selectedTrail?.max_slope?.toFixed(1)}% | <strong>Avg:</strong> {selectedTrail?.avg_slope?.toFixed(1)}%
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Combines maximum slope and rolling terrain index for overall technical challenge
-                        </p>
-                      </div>
+                      {weatherData ? (
+                        <>
+                          <p className="text-sm text-gray-700 mb-2">
+                            <strong>Conditions:</strong>{" "}
+                            {weatherData.live_weather.conditions}
+                          </p>
+                          <p className="text-sm text-gray-700 mb-2">
+                            <strong>Difficulty Multiplier:</strong>{" "}
+                            {weatherData.live_weather.multiplier}x
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {weatherData.live_weather.explanation}
+                          </p>
+                          {weatherData.updated_difficulty && (
+                            <div className="mt-2 p-2 bg-blue-100 rounded text-xs">
+                              <strong>Adjusted Difficulty:</strong>{" "}
+                              {weatherData.updated_difficulty.base_difficulty} →{" "}
+                              {weatherData.updated_difficulty.weather_adjusted}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-700 mb-2">
+                            <strong>Exposure Level:</strong>{" "}
+                            {
+                              getWeatherExposureFromScore(
+                                selectedTrail?.weather_difficulty_multiplier
+                              ).level
+                            }
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Risk factors:{" "}
+                            {getWeatherExposureFromScore(
+                              selectedTrail?.weather_difficulty_multiplier
+                            ).factors.join(", ")}
+                          </p>
+                        </>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              )}
+
+                    {/* Terrain Analysis Box */}
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Mountain className="w-5 h-5 text-green-600" />
+                        <h4 className="font-semibold text-gray-800">
+                          Terrain Analysis
+                        </h4>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-2">
+                        <strong>Variety Score:</strong>{" "}
+                        {selectedTrail?.terrain_variety_score}/10
+                      </p>
+                      <p className="text-sm text-gray-700 mb-2">
+                        <strong>Total Elevation Change:</strong>{" "}
+                        {selectedTrail?.elevation_change_total}m
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {getTerrainVarietyDescription(
+                          selectedTrail?.terrain_variety_score
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Effort Analysis Box */}
+                    <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Gauge className="w-5 h-5 text-orange-600" />
+                        <h4 className="font-semibold text-gray-800">
+                          Effort Estimation
+                        </h4>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-2">
+                        <strong>Estimated Time:</strong>{" "}
+                        {selectedTrail?.estimated_time_hours} hours
+                      </p>
+                      <p className="text-sm text-gray-700 mb-2">
+                        <strong>Rolling Intensity:</strong>{" "}
+                        {(selectedTrail?.rolling_hills_index * 10).toFixed(1)}
+                        /10
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Based on Naismith's Rule: 5km/h + 1h per 600m elevation
+                        gain, adjusted for terrain complexity
+                      </p>
+                    </div>
+
+                    {/* Technical Difficulty Box */}
+                    <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Activity className="w-5 h-5 text-purple-600" />
+                        <h4 className="font-semibold text-gray-800">
+                          Technical Difficulty
+                        </h4>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-2">
+                        <strong>Technical Rating:</strong>{" "}
+                        {selectedTrail?.technical_rating}/10
+                      </p>
+                      <p className="text-sm text-gray-700 mb-2">
+                        <strong>Max Slope:</strong>{" "}
+                        {selectedTrail?.max_slope?.toFixed(1)}% |{" "}
+                        <strong>Avg:</strong>{" "}
+                        {selectedTrail?.avg_slope?.toFixed(1)}%
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Combines maximum slope and rolling terrain index for
+                        overall technical challenge
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </>
         ) : (
           <Card className="shadow-lg border-0 bg-gradient-to-br from-gray-50 to-white">
@@ -1051,7 +1191,8 @@ export default function Dashboard() {
                 Select a Trail
               </h3>
               <p className="text-gray-500 text-lg max-w-md mx-auto">
-                Click on any trail marker in the map above to explore detailed analytics and insights
+                Click on any trail marker in the map above to explore detailed
+                analytics and insights
               </p>
             </CardContent>
           </Card>
@@ -1071,22 +1212,29 @@ export default function Dashboard() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {similarTrails.map((similar, index) => (
-                  <div key={similar.trail.id} className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md transition-all duration-200 cursor-pointer"
-                       onClick={() => handleTrailClick({
-                         id: similar.trail.id,
-                         name: similar.trail.name,
-                         distance: similar.trail.distance,
-                         elevationGain: similar.trail.elevation_gain,
-                         elevationLoss: similar.trail.elevation_loss,
-                         maxElevation: similar.trail.max_elevation,
-                         minElevation: similar.trail.min_elevation,
-                         rollingHillsIndex: similar.trail.rolling_hills_index,
-                         difficultyScore: similar.trail.difficulty_score,
-                         difficultyLevel: similar.trail.difficulty_level,
-                         elevationProfile: similar.trail.elevation_profile,
-                       })}>
+                  <div
+                    key={similar.trail.id}
+                    className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md transition-all duration-200 cursor-pointer"
+                    onClick={() =>
+                      handleTrailClick({
+                        id: similar.trail.id,
+                        name: similar.trail.name,
+                        distance: similar.trail.distance,
+                        elevationGain: similar.trail.elevation_gain,
+                        elevationLoss: similar.trail.elevation_loss,
+                        maxElevation: similar.trail.max_elevation,
+                        minElevation: similar.trail.min_elevation,
+                        rollingHillsIndex: similar.trail.rolling_hills_index,
+                        difficultyScore: similar.trail.difficulty_score,
+                        difficultyLevel: similar.trail.difficulty_level,
+                        elevationProfile: similar.trail.elevation_profile,
+                      })
+                    }
+                  >
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-bold text-gray-800">{similar.trail.name}</h4>
+                      <h4 className="font-bold text-gray-800">
+                        {similar.trail.name}
+                      </h4>
                       <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold">
                         {(similar.similarity_score * 100).toFixed(0)}% match
                       </div>
@@ -1094,20 +1242,29 @@ export default function Dashboard() {
                     <div className="space-y-2 text-sm text-gray-600">
                       <div className="flex justify-between">
                         <span>Distance:</span>
-                        <span className="font-semibold">{similar.trail.distance}km</span>
+                        <span className="font-semibold">
+                          {similar.trail.distance}km
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Elevation:</span>
-                        <span className="font-semibold">{similar.trail.elevation_gain}m</span>
+                        <span className="font-semibold">
+                          {similar.trail.elevation_gain}m
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span>Difficulty:</span>
-                        <span className={`font-semibold ${
-                          similar.trail.difficulty_level === 'Easy' ? 'text-green-600' :
-                          similar.trail.difficulty_level === 'Moderate' ? 'text-yellow-600' :
-                          similar.trail.difficulty_level === 'Hard' ? 'text-orange-600' :
-                          'text-red-600'
-                        }`}>
+                        <span
+                          className={`font-semibold ${
+                            similar.trail.difficulty_level === "Easy"
+                              ? "text-green-600"
+                              : similar.trail.difficulty_level === "Moderate"
+                              ? "text-yellow-600"
+                              : similar.trail.difficulty_level === "Hard"
+                              ? "text-orange-600"
+                              : "text-red-600"
+                          }`}
+                        >
                           {similar.trail.difficulty_level}
                         </span>
                       </div>
@@ -1117,7 +1274,9 @@ export default function Dashboard() {
               </div>
               <div className="bg-blue-50 rounded-xl p-4 mt-4">
                 <p className="text-sm text-gray-700 font-medium">
-                  💡 Recommendations based on distance, elevation gain, difficulty score, and terrain characteristics similar to <strong>{selectedTrail.name}</strong>
+                  💡 Recommendations based on distance, elevation gain,
+                  difficulty score, and terrain characteristics similar to{" "}
+                  <strong>{selectedTrail.name}</strong>
                 </p>
               </div>
             </CardContent>
