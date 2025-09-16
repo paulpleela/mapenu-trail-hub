@@ -59,13 +59,18 @@ def haversine(lat1, lon1, lat2, lon2):
     )
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-
+""" 
+URAWEE
+measure ‘bumpiness’, meaningful ups/downs over 1 meter
+    - frequency 60%
+    - amplitude 40%
+"""
 def analyze_rolling_hills(elevations, distances):
     """Advanced rolling hills analysis: counts and scores significant ascents/descents"""
     if len(elevations) < 3:
         return 0.0
 
-    threshold = 5  # meters, what counts as a 'hill'
+    threshold = 1  # meters, what counts as a 'hill'
     significant_changes = []
     for i in range(1, len(elevations)):
         change = elevations[i] - elevations[i - 1]
@@ -80,18 +85,25 @@ def analyze_rolling_hills(elevations, distances):
     avg_hill_size = sum(significant_changes) / len(significant_changes) if significant_changes else 0
 
     # Composite index: weighted sum (tweak weights as needed)
-    rolling_index = 0.6 * hills_per_km + 0.4 * (avg_hill_size / 20)
+    rolling_index = 0.6 * hills_per_km + 0.4 * (avg_hill_size / 20) #typical big hills are ~20 m per hill
 
     # Normalize to 0-1 scale
     normalized_index = min(rolling_index, 1.0)
     return normalized_index
 
-
+"""
+gives a 0–100% match by weighting 4 checks:
+    distance difference within ±1 km (30%),
+    elevation-gain difference within ±500 m (30%),
+    overall difficulty within ±5 on our 10-point scale (25%),
+    and terrain character using the rolling-hills index (15%).
+    Higher sub-scores → higher overall match.
+"""
 def calculate_trail_similarity(trail1, trail2):
     """Calculate similarity score between two trails (0-1, higher = more similar)"""
     # Normalize factors for comparison
     distance_diff = abs(trail1['distance'] - trail2['distance'])
-    distance_similarity = max(0, 1 - (distance_diff / 10))  # Within 10km is very similar
+    distance_similarity = max(0, 1 - (distance_diff / 1000))  # Within 1km is very similar
     
     elevation_gain_diff = abs(trail1['elevation_gain'] - trail2['elevation_gain'])
     elevation_similarity = max(0, 1 - (elevation_gain_diff / 500))  # Within 500m is similar
@@ -249,7 +261,6 @@ def get_terrain_variety_description(score):
         return "Limited terrain variety, mostly consistent elevation"
     else:
         return "Flat or very consistent terrain"
-
 
 def get_weather_exposure_from_score(score):
     """Convert weather score back to exposure level and risk factors"""
