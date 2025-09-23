@@ -59,12 +59,15 @@ def haversine(lat1, lon1, lat2, lon2):
     )
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
+
 """ 
 URAWEE
 measure ‘bumpiness’, meaningful ups/downs over 1 meter
     - frequency 60%
     - amplitude 40%
 """
+
+
 def analyze_rolling_hills(elevations, distances):
     """Advanced rolling hills analysis: counts and scores significant ascents/descents"""
     if len(elevations) < 3:
@@ -79,76 +82,110 @@ def analyze_rolling_hills(elevations, distances):
 
     # Frequency: how many significant hills per km
     total_distance = distances[-1] if distances else 1
-    hills_per_km = len(significant_changes) / total_distance if total_distance > 0 else 0
+    hills_per_km = (
+        len(significant_changes) / total_distance if total_distance > 0 else 0
+    )
 
     # Amplitude: average size of significant hills
-    avg_hill_size = sum(significant_changes) / len(significant_changes) if significant_changes else 0
+    avg_hill_size = (
+        sum(significant_changes) / len(significant_changes)
+        if significant_changes
+        else 0
+    )
 
     # Composite index: weighted sum (tweak weights as needed)
-    rolling_index = 0.6 * hills_per_km + 0.4 * (avg_hill_size / 20) #typical big hills are ~20 m per hill
+    rolling_index = 0.6 * hills_per_km + 0.4 * (
+        avg_hill_size / 20
+    )  # typical big hills are ~20 m per hill
 
     # Normalize to 0-1 scale
     normalized_index = min(rolling_index, 1.0)
     return normalized_index
 
+
 """
-gives a 0–100% match by weighting 4 checks:
-    distance difference within ±1 km (30%),
-    elevation-gain difference within ±500 m (30%),
-    overall difficulty within ±5 on our 10-point scale (25%),
-    and terrain character using the rolling-hills index (15%).
+gives a 0–100% match by weighting 5 checks:
+    distance difference within ±1 km (25%),
+    elevation-gain difference within ±500 m (25%),
+    overall difficulty within ±5 on our 10-point scale (20%),
+    terrain character using the rolling-hills index (15%),
+    and surface difficulty similarity (15%).
     Higher sub-scores → higher overall match.
 """
+
+
 def calculate_trail_similarity(trail1, trail2):
     """Calculate similarity score between two trails (0-1, higher = more similar)"""
     # Normalize factors for comparison
-    distance_diff = abs(trail1['distance'] - trail2['distance'])
-    distance_similarity = max(0, 1 - (distance_diff / 1000))  # Within 1km is very similar
-    
-    elevation_gain_diff = abs(trail1['elevation_gain'] - trail2['elevation_gain'])
-    elevation_similarity = max(0, 1 - (elevation_gain_diff / 500))  # Within 500m is similar
-    
-    difficulty_diff = abs(trail1['difficulty_score'] - trail2['difficulty_score'])
-    difficulty_similarity = max(0, 1 - (difficulty_diff / 5))  # Within 5 points is similar
-    
-    rolling_hills_diff = abs(trail1['rolling_hills_index'] - trail2['rolling_hills_index'])
+    distance_diff = abs(trail1["distance"] - trail2["distance"])
+    distance_similarity = max(
+        0, 1 - (distance_diff / 1000)
+    )  # Within 1km is very similar
+
+    elevation_gain_diff = abs(trail1["elevation_gain"] - trail2["elevation_gain"])
+    elevation_similarity = max(
+        0, 1 - (elevation_gain_diff / 500)
+    )  # Within 500m is similar
+
+    difficulty_diff = abs(trail1["difficulty_score"] - trail2["difficulty_score"])
+    difficulty_similarity = max(
+        0, 1 - (difficulty_diff / 5)
+    )  # Within 5 points is similar
+
+    rolling_hills_diff = abs(
+        trail1["rolling_hills_index"] - trail2["rolling_hills_index"]
+    )
     rolling_similarity = max(0, 1 - (rolling_hills_diff / 0.5))  # Within 0.5 is similar
-    
+
+    # Surface difficulty similarity
+    surface1 = trail1.get("surface_difficulty_score", 1.0)
+    surface2 = trail2.get("surface_difficulty_score", 1.0)
+    surface_diff = abs(surface1 - surface2)
+    surface_similarity = max(
+        0, 1 - (surface_diff / 0.5)
+    )  # Within 0.5 multiplier is similar
+
     # Weighted average (adjust weights as needed)
     similarity = (
-        distance_similarity * 0.3 +
-        elevation_similarity * 0.3 +
-        difficulty_similarity * 0.25 +
-        rolling_similarity * 0.15
+        distance_similarity * 0.25
+        + elevation_similarity * 0.25
+        + difficulty_similarity * 0.20
+        + rolling_similarity * 0.15
+        + surface_similarity * 0.15
     )
-    
+
     return similarity
 
 
 def get_trail_weather_exposure(trail):
     """Calculate static weather exposure risk (doesn't change with weather)"""
-    max_elev = trail.get('max_elevation', 0)
-    
+    max_elev = trail.get("max_elevation", 0)
+
     # Return exposure level and explanation (static characteristics)
     if max_elev > 1500:
         return {
             "exposure_level": "High",
-            "risk_factors": ["Rapid weather changes", "Snow/ice risk", "High wind exposure", "Temperature drops"]
+            "risk_factors": [
+                "Rapid weather changes",
+                "Snow/ice risk",
+                "High wind exposure",
+                "Temperature drops",
+            ],
         }
     elif max_elev > 1000:
         return {
-            "exposure_level": "Moderate", 
-            "risk_factors": ["Cooler temperatures", "Wind exposure", "Potential fog"]
+            "exposure_level": "Moderate",
+            "risk_factors": ["Cooler temperatures", "Wind exposure", "Potential fog"],
         }
     elif max_elev > 500:
         return {
             "exposure_level": "Low-Moderate",
-            "risk_factors": ["Slightly cooler temps", "Some wind exposure"]
+            "risk_factors": ["Slightly cooler temps", "Some wind exposure"],
         }
     else:
         return {
             "exposure_level": "Low",
-            "risk_factors": ["Minimal weather impact", "Protected terrain"]
+            "risk_factors": ["Minimal weather impact", "Protected terrain"],
         }
 
 
@@ -158,26 +195,28 @@ async def get_live_weather_difficulty(trail_coords, weather_api_key=None):
         return {
             "multiplier": 1.0,
             "conditions": "No coordinates available",
-            "explanation": "Trail coordinates required for weather data"
+            "explanation": "Trail coordinates required for weather data",
         }
-    
+
     # For demo purposes, simulate different conditions
     # In production, this would call OpenWeatherMap or similar API
     import random
-    
+
     # Simulate current conditions (in real app, call weather API)
-    conditions = random.choice([
-        {"temp": 15, "wind": 10, "rain": False, "visibility": "Good"},
-        {"temp": 5, "wind": 25, "rain": True, "visibility": "Poor"},
-        {"temp": 25, "wind": 5, "rain": False, "visibility": "Excellent"},
-        {"temp": -2, "wind": 30, "rain": False, "visibility": "Fair"},
-        {"temp": 18, "wind": 15, "rain": False, "visibility": "Good"},
-        {"temp": 12, "wind": 8, "rain": False, "visibility": "Excellent"}
-    ])
-    
+    conditions = random.choice(
+        [
+            {"temp": 15, "wind": 10, "rain": False, "visibility": "Good"},
+            {"temp": 5, "wind": 25, "rain": True, "visibility": "Poor"},
+            {"temp": 25, "wind": 5, "rain": False, "visibility": "Excellent"},
+            {"temp": -2, "wind": 30, "rain": False, "visibility": "Fair"},
+            {"temp": 18, "wind": 15, "rain": False, "visibility": "Good"},
+            {"temp": 12, "wind": 8, "rain": False, "visibility": "Excellent"},
+        ]
+    )
+
     multiplier = 1.0
     factors = []
-    
+
     # Temperature impact
     if conditions["temp"] < 0:
         multiplier += 0.3
@@ -188,7 +227,7 @@ async def get_live_weather_difficulty(trail_coords, weather_api_key=None):
     elif conditions["temp"] > 30:
         multiplier += 0.1
         factors.append("Hot temperatures")
-    
+
     # Wind impact
     if conditions["wind"] > 25:
         multiplier += 0.2
@@ -196,25 +235,25 @@ async def get_live_weather_difficulty(trail_coords, weather_api_key=None):
     elif conditions["wind"] > 15:
         multiplier += 0.1
         factors.append("Moderate winds")
-    
+
     # Rain impact
     if conditions["rain"]:
         multiplier += 0.3
         factors.append("Wet/slippery conditions")
-    
+
     # Visibility impact
     if conditions["visibility"] == "Poor":
         multiplier += 0.2
         factors.append("Poor visibility")
-    
+
     condition_desc = f"{conditions['temp']}°C, {conditions['wind']}km/h winds"
     if conditions["rain"]:
         condition_desc += ", raining"
-    
+
     return {
         "multiplier": round(multiplier, 2),
         "conditions": condition_desc,
-        "explanation": f"Weather factors: {', '.join(factors) if factors else 'Good conditions'}"
+        "explanation": f"Weather factors: {', '.join(factors) if factors else 'Good conditions'}",
     }
 
 
@@ -222,22 +261,22 @@ def calculate_terrain_variety(elevations):
     """Calculate how varied the terrain is (0-10 scale)"""
     if len(elevations) < 10:
         return 0
-    
+
     # Calculate elevation ranges in 100m bands
     elevation_bands = set()
     for elev in elevations:
         band = int(elev / 100) * 100  # Round to nearest 100m
         elevation_bands.add(band)
-    
+
     # More bands = more variety
     variety_score = min(len(elevation_bands), 10)  # Cap at 10
-    
+
     # Also consider elevation change rate
     elevation_changes = []
     for i in range(1, len(elevations)):
-        change_rate = abs(elevations[i] - elevations[i-1])
+        change_rate = abs(elevations[i] - elevations[i - 1])
         elevation_changes.append(change_rate)
-    
+
     # Bonus for frequent elevation changes
     if elevation_changes:
         avg_change = sum(elevation_changes) / len(elevation_changes)
@@ -245,7 +284,7 @@ def calculate_terrain_variety(elevations):
             variety_score = min(variety_score + 2, 10)
         elif avg_change > 10:  # Moderate changes
             variety_score = min(variety_score + 1, 10)
-    
+
     return variety_score
 
 
@@ -261,37 +300,208 @@ def get_terrain_variety_description(score):
         return "Limited terrain variety, mostly consistent elevation"
     else:
         return "Flat or very consistent terrain"
+    
+"""
+Easy (0.7-0.8x): Paved roads, boardwalks, concrete
+Normal (1.0x): Dirt trails, gravel, grass (baseline)
+Moderate (1.1-1.3x): Soil, forest floor, wood chips, tall grass
+Challenging (1.3-1.6x): Sand, mud, loose gravel, scree, snow
+Difficult (1.6-2.0x): Rock, boulders, swamp, ice
+"""
+def get_surface_difficulty_multiplier(surface_type):
+    """Get difficulty multiplier based on terrain surface type"""
+    surface_multipliers = {
+        # Easy surfaces (< 1.0)
+        "paved": 0.7,  # Paved roads, easiest
+        "boardwalk": 0.8,  # Wooden boardwalks
+        "concrete": 0.75,  # Concrete paths
+        # Normal surfaces (1.0)
+        "dirt": 1.0,  # Packed dirt trails (baseline)
+        "gravel": 1.0,  # Well-maintained gravel
+        "grass": 1.0,  # Short grass
+        # Moderate surfaces (1.1-1.3)
+        "soil": 1.1,  # Loose soil
+        "forest_floor": 1.15,  # Leaf litter, small branches
+        "crushed_stone": 1.1,  # Loose crushed stone
+        "wood_chips": 1.2,  # Wood chip trails
+        "tall_grass": 1.25,  # Long grass, meadows
+        # Challenging surfaces (1.3-1.6)
+        "sand": 1.4,  # Beach sand, very tiring
+        "mud": 1.5,  # Muddy conditions
+        "loose_gravel": 1.3,  # Loose, shifting gravel
+        "scree": 1.6,  # Loose rock fragments
+        "snow": 1.4,  # Snow covered (not ice)
+        # Difficult surfaces (1.6-2.0)
+        "rock": 1.7,  # Rocky terrain, scrambling
+        "boulder": 1.8,  # Large rocks, careful footing
+        "swamp": 1.9,  # Swampy, unstable ground
+        "ice": 2.0,  # Icy conditions, dangerous
+        # Default for unknown
+        "unknown": 1.0,
+    }
+
+    return surface_multipliers.get(surface_type.lower(), 1.0)
+
+
+def estimate_surface_type_from_terrain(coordinates, elevation_profile=None):
+    """Estimate likely surface types based on terrain characteristics"""
+    if not coordinates:
+        return [{"surface": "unknown", "percentage": 100}]
+
+    # Analyze terrain to estimate surface types
+    # This is a simplified estimation - in reality you'd use satellite data,
+    # land cover maps, or trail databases
+
+    surface_segments = []
+    num_points = len(coordinates)
+
+    # Get elevation statistics if available
+    elevations = []
+    if elevation_profile:
+        elevations = [point.get("elevation", 0) for point in elevation_profile]
+
+    # Estimate based on coordinate patterns and elevation
+    if elevations:
+        avg_elevation = sum(elevations) / len(elevations)
+        elevation_variance = sum((e - avg_elevation) ** 2 for e in elevations) / len(
+            elevations
+        )
+
+        # High elevation, high variance = rocky terrain
+        if avg_elevation > 800 and elevation_variance > 1000:
+            surface_segments = [
+                {"surface": "rock", "percentage": 40},
+                {"surface": "dirt", "percentage": 35},
+                {"surface": "scree", "percentage": 25},
+            ]
+        # High elevation, low variance = alpine meadows
+        elif avg_elevation > 800:
+            surface_segments = [
+                {"surface": "grass", "percentage": 50},
+                {"surface": "dirt", "percentage": 30},
+                {"surface": "rock", "percentage": 20},
+            ]
+        # Medium elevation, high variance = forest trails
+        elif avg_elevation > 200 and elevation_variance > 500:
+            surface_segments = [
+                {"surface": "forest_floor", "percentage": 60},
+                {"surface": "dirt", "percentage": 30},
+                {"surface": "soil", "percentage": 10},
+            ]
+        # Low elevation, coastal areas
+        elif avg_elevation < 100:
+            # Could be coastal, might have sand
+            surface_segments = [
+                {"surface": "dirt", "percentage": 50},
+                {"surface": "sand", "percentage": 30},
+                {"surface": "grass", "percentage": 20},
+            ]
+        else:
+            # Default mixed terrain
+            surface_segments = [
+                {"surface": "dirt", "percentage": 70},
+                {"surface": "gravel", "percentage": 20},
+                {"surface": "grass", "percentage": 10},
+            ]
+    else:
+        # No elevation data, assume mixed terrain
+        surface_segments = [
+            {"surface": "dirt", "percentage": 60},
+            {"surface": "gravel", "percentage": 25},
+            {"surface": "grass", "percentage": 15},
+        ]
+
+    return surface_segments
+
+
+def calculate_surface_difficulty_score(surface_segments):
+    """Calculate overall surface difficulty score from surface segments"""
+    if not surface_segments:
+        return 1.0
+
+    total_score = 0
+    total_percentage = 0
+
+    for segment in surface_segments:
+        surface = segment.get("surface", "unknown")
+        percentage = segment.get("percentage", 0)
+        multiplier = get_surface_difficulty_multiplier(surface)
+
+        total_score += multiplier * percentage
+        total_percentage += percentage
+
+    if total_percentage == 0:
+        return 1.0
+
+    # Weighted average of surface difficulties
+    return total_score / total_percentage
+
+
+def get_surface_difficulty_description(score, surface_segments):
+    """Get human-readable description of surface difficulty"""
+    primary_surfaces = sorted(
+        surface_segments, key=lambda x: x["percentage"], reverse=True
+    )[:2]
+
+    description = f"Surface difficulty: {score:.2f}x baseline. "
+
+    if score <= 0.8:
+        description += "Very easy walking on "
+    elif score <= 1.0:
+        description += "Standard trail surface with "
+    elif score <= 1.3:
+        description += "Moderately challenging surface with "
+    elif score <= 1.6:
+        description += "Difficult surface requiring careful footing with "
+    else:
+        description += "Very challenging surface demanding experience with "
+
+    surface_names = []
+    for surface in primary_surfaces:
+        name = surface["surface"].replace("_", " ")
+        percentage = surface["percentage"]
+        surface_names.append(f"{name} ({percentage}%)")
+
+    description += " and ".join(surface_names)
+
+    return description
+
 
 def get_weather_exposure_from_score(score):
     """Convert weather score back to exposure level and risk factors"""
     # Handle None/null values
     if score is None:
         score = 1.0  # Default to low exposure
-    
+
     try:
         score = float(score)  # Ensure it's a number
     except (ValueError, TypeError):
         score = 1.0  # Default to low exposure if conversion fails
-    
+
     if score >= 1.25:
         return {
             "exposure_level": "High",
-            "risk_factors": ["Rapid weather changes", "Snow/ice risk", "High wind exposure", "Temperature drops"]
+            "risk_factors": [
+                "Rapid weather changes",
+                "Snow/ice risk",
+                "High wind exposure",
+                "Temperature drops",
+            ],
         }
     elif score >= 1.15:
         return {
             "exposure_level": "Moderate",
-            "risk_factors": ["Cooler temperatures", "Wind exposure", "Potential fog"]
+            "risk_factors": ["Cooler temperatures", "Wind exposure", "Potential fog"],
         }
     elif score >= 1.05:
         return {
             "exposure_level": "Low-Moderate",
-            "risk_factors": ["Slightly cooler temps", "Some wind exposure"]
+            "risk_factors": ["Slightly cooler temps", "Some wind exposure"],
         }
     else:
         return {
             "exposure_level": "Low",
-            "risk_factors": ["Minimal weather impact", "Protected terrain"]
+            "risk_factors": ["Minimal weather impact", "Protected terrain"],
         }
 
 
@@ -299,21 +509,21 @@ def find_relevant_dem_tiles(trail_coords):
     """Find DEM tiles that cover the trail coordinates"""
     if not trail_coords:
         return []
-    
+
     # Convert lat/lon to UTM (approximately) to match DEM tile naming
     # Brisbane DEM tiles are in MGA Zone 56 (EPSG:28356)
     # Tile naming follows pattern: Brisbane_YYYY_LGA_SW_EASTING_NORTHING_1K_DEM_1m.tif
-    
+
     relevant_tiles = []
     dem_dir = os.path.join("data", "QLD Government", "DEM", "1 Metre")
-    
+
     if not os.path.exists(dem_dir):
         print(f"DEM directory not found: {dem_dir}")
         return []
-    
+
     # Get all available DEM files
     dem_files = glob.glob(os.path.join(dem_dir, "*.tif"))
-    
+
     # For now, return all available tiles - in production you'd filter by bounds
     # This is a simplified approach for the demo
     return dem_files[:4]  # Limit to 4 tiles for performance
@@ -323,22 +533,26 @@ def process_dem_for_trail(trail_coords, dem_files, resolution_factor=4):
     """Process DEM data for 3D visualization of a trail"""
     if not dem_files or not trail_coords:
         return None
-    
+
     try:
-        print(f"Processing DEM with {len(dem_files)} files and {len(trail_coords)} trail coordinates")
-        
+        print(
+            f"Processing DEM with {len(dem_files)} files and {len(trail_coords)} trail coordinates"
+        )
+
         # For demonstration, let's create synthetic terrain data if DEM processing fails
         # This ensures the 3D viewer works while we debug the real DEM processing
-        
+
         # Calculate bounding box for the trail
         lats = [coord[0] for coord in trail_coords]
         lons = [coord[1] for coord in trail_coords]
-        
+
         min_lat, max_lat = min(lats), max(lats)
         min_lon, max_lon = min(lons), max(lons)
-        
-        print(f"Trail bounds: lat {min_lat:.6f} to {max_lat:.6f}, lon {min_lon:.6f} to {max_lon:.6f}")
-        
+
+        print(
+            f"Trail bounds: lat {min_lat:.6f} to {max_lat:.6f}, lon {min_lon:.6f} to {max_lon:.6f}"
+        )
+
         # Try to process real DEM data
         try:
             # Read first DEM file to get basic info
@@ -346,26 +560,26 @@ def process_dem_for_trail(trail_coords, dem_files, resolution_factor=4):
                 print(f"DEM CRS: {dem.crs}")
                 print(f"DEM bounds: {dem.bounds}")
                 print(f"DEM shape: {dem.shape}")
-                
+
                 # Simple approach: read a small area from the first DEM file
                 elevation_data = dem.read(1)
                 transform = dem.transform
-                
+
                 # Get a subset of the elevation data for performance
                 height, width = elevation_data.shape
                 step = resolution_factor * 10  # Larger step for demo
-                
+
                 subset_height = height // step
                 subset_width = width // step
-                
+
                 if subset_height < 10 or subset_width < 10:
                     raise ValueError("DEM subset too small")
-                
+
                 # Create coordinate grids for the subset
                 x_coords = []
                 y_coords = []
                 elevations = []
-                
+
                 for i in range(0, subset_height):
                     for j in range(0, subset_width):
                         row = i * step
@@ -375,202 +589,244 @@ def process_dem_for_trail(trail_coords, dem_files, resolution_factor=4):
                             if not np.isnan(elevation) and elevation > -9999:
                                 # Get coordinate in DEM's projection
                                 x, y = rasterio.transform.xy(transform, row, col)
-                                
+
                                 # Convert to lat/lon
-                                lon, lat = transform(dem.crs, CRS.from_epsg(4326), [x], [y])
+                                lon, lat = transform(
+                                    dem.crs, CRS.from_epsg(4326), [x], [y]
+                                )
                                 x_coords.append(lon[0])
                                 y_coords.append(lat[0])
                                 elevations.append(elevation)
-                
+
                 print(f"Extracted {len(elevations)} elevation points from DEM")
-                
+
                 if len(elevations) >= 100:  # Minimum points for visualization
                     # Create regular grid for 3D surface
                     grid_size = 30
                     x_min, x_max = min(x_coords), max(x_coords)
                     y_min, y_max = min(y_coords), max(y_coords)
-                    
+
                     xi = np.linspace(x_min, x_max, grid_size)
                     yi = np.linspace(y_min, y_max, grid_size)
                     xi_grid, yi_grid = np.meshgrid(xi, yi)
-                    
+
                     # Interpolate elevations onto regular grid
                     points = np.column_stack((x_coords, y_coords))
-                    zi_grid = griddata(points, elevations, (xi_grid, yi_grid), method='linear')
-                    
+                    zi_grid = griddata(
+                        points, elevations, (xi_grid, yi_grid), method="linear"
+                    )
+
                     # Fill NaN values
                     mask = np.isnan(zi_grid)
                     if np.any(mask):
-                        zi_grid_filled = griddata(points, elevations, (xi_grid, yi_grid), method='nearest')
+                        zi_grid_filled = griddata(
+                            points, elevations, (xi_grid, yi_grid), method="nearest"
+                        )
                         zi_grid[mask] = zi_grid_filled[mask]
-                    
+
                     # Process trail line
                     trail_line = []
                     for coord in trail_coords[::5]:  # Subsample trail points
                         lat, lon = coord
                         # Interpolate elevation for this trail point
                         if x_min <= lon <= x_max and y_min <= lat <= y_max:
-                            trail_elev = griddata(points, elevations, (lon, lat), method='linear')
+                            trail_elev = griddata(
+                                points, elevations, (lon, lat), method="linear"
+                            )
                             if np.isnan(trail_elev):
-                                trail_elev = griddata(points, elevations, (lon, lat), method='nearest')
-                            
+                                trail_elev = griddata(
+                                    points, elevations, (lon, lat), method="nearest"
+                                )
+
                             if not np.isnan(trail_elev):
-                                trail_line.append({
-                                    'x': lon,
-                                    'y': lat,
-                                    'z': float(trail_elev)
-                                })
-                    
+                                trail_line.append(
+                                    {"x": lon, "y": lat, "z": float(trail_elev)}
+                                )
+
                     surface_data = {
-                        'x': xi.tolist(),
-                        'y': yi.tolist(),
-                        'z': zi_grid.tolist(),
-                        'bounds': {
-                            'x_min': float(x_min),
-                            'x_max': float(x_max),
-                            'y_min': float(y_min),
-                            'y_max': float(y_max),
-                            'z_min': float(np.nanmin(zi_grid)),
-                            'z_max': float(np.nanmax(zi_grid))
-                        }
+                        "x": xi.tolist(),
+                        "y": yi.tolist(),
+                        "z": zi_grid.tolist(),
+                        "bounds": {
+                            "x_min": float(x_min),
+                            "x_max": float(x_max),
+                            "y_min": float(y_min),
+                            "y_max": float(y_max),
+                            "z_min": float(np.nanmin(zi_grid)),
+                            "z_max": float(np.nanmax(zi_grid)),
+                        },
                     }
-                    
+
                     return {
-                        'surface': surface_data,
-                        'trail_line': trail_line,
-                        'metadata': {
-                            'grid_size': grid_size,
-                            'num_trail_points': len(trail_line),
-                            'elevation_range': float(np.nanmax(zi_grid) - np.nanmin(zi_grid)),
-                            'data_source': 'Brisbane DEM'
-                        }
+                        "surface": surface_data,
+                        "trail_line": trail_line,
+                        "metadata": {
+                            "grid_size": grid_size,
+                            "num_trail_points": len(trail_line),
+                            "elevation_range": float(
+                                np.nanmax(zi_grid) - np.nanmin(zi_grid)
+                            ),
+                            "data_source": "Brisbane DEM",
+                        },
                     }
-                    
+
         except Exception as dem_error:
             print(f"DEM processing failed: {dem_error}")
-        
+
         # Fallback: Create Mt Coot-tha area terrain for demonstration
         print("Creating Mt Coot-tha area terrain for demonstration")
-        
+
         # Mt Coot-tha specific coordinates (Brisbane, Australia)
         # These are the actual boundaries of Mt Coot-tha area
         mt_coottha_bounds = {
-            'lat_min': -27.495,   # Southern boundary
-            'lat_max': -27.465,   # Northern boundary  
-            'lon_min': 152.940,   # Western boundary
-            'lon_max': 152.980    # Eastern boundary
+            "lat_min": -27.495,  # Southern boundary
+            "lat_max": -27.465,  # Northern boundary
+            "lon_min": 152.940,  # Western boundary
+            "lon_max": 152.980,  # Eastern boundary
         }
-        
+
         grid_size = 80  # High resolution for the whole mountain area
-        
-        x_min = mt_coottha_bounds['lon_min']
-        x_max = mt_coottha_bounds['lon_max'] 
-        y_min = mt_coottha_bounds['lat_min']
-        y_max = mt_coottha_bounds['lat_max']
-        
+
+        x_min = mt_coottha_bounds["lon_min"]
+        x_max = mt_coottha_bounds["lon_max"]
+        y_min = mt_coottha_bounds["lat_min"]
+        y_max = mt_coottha_bounds["lat_max"]
+
         xi = np.linspace(x_min, x_max, grid_size)
         yi = np.linspace(y_min, y_max, grid_size)
         xi_grid, yi_grid = np.meshgrid(xi, yi)
-        
+
         # Create realistic Mt Coot-tha terrain profile
         # Mt Coot-tha peak is approximately at -27.4756°S, 152.9581°E with elevation ~287m
         peak_lat = -27.4756
         peak_lon = 152.9581
-        
+
         zi_grid = np.zeros((grid_size, grid_size))
         for i in range(grid_size):
             for j in range(grid_size):
-                lat = yi_grid[i,j]
-                lon = xi_grid[i,j]
-                
+                lat = yi_grid[i, j]
+                lon = xi_grid[i, j]
+
                 # Distance from Mt Coot-tha summit
-                dist_to_peak = np.sqrt((lat - peak_lat)**2 + (lon - peak_lon)**2)
-                
+                dist_to_peak = np.sqrt((lat - peak_lat) ** 2 + (lon - peak_lon) ** 2)
+
                 # Create Mt Coot-tha's characteristic shape
                 # Main peak with gradual slopes
                 main_peak = 287 * np.exp(-dist_to_peak * 800)  # Peak at ~287m
-                
+
                 # Secondary ridges and spurs
-                ridge1 = 150 * np.exp(-((lat - (-27.480))**2 + (lon - 152.950)**2) * 2000)
-                ridge2 = 120 * np.exp(-((lat - (-27.470))**2 + (lon - 152.965)**2) * 2500)
-                ridge3 = 180 * np.exp(-((lat - (-27.485))**2 + (lon - 152.975)**2) * 2200)
-                
+                ridge1 = 150 * np.exp(
+                    -((lat - (-27.480)) ** 2 + (lon - 152.950) ** 2) * 2000
+                )
+                ridge2 = 120 * np.exp(
+                    -((lat - (-27.470)) ** 2 + (lon - 152.965) ** 2) * 2500
+                )
+                ridge3 = 180 * np.exp(
+                    -((lat - (-27.485)) ** 2 + (lon - 152.975) ** 2) * 2200
+                )
+
                 # Valley systems around the mountain
-                valley1 = -50 * np.exp(-((lat - (-27.490))**2 + (lon - 152.945)**2) * 1500)
-                valley2 = -40 * np.exp(-((lat - (-27.475))**2 + (lon - 152.985)**2) * 1800)
-                
+                valley1 = -50 * np.exp(
+                    -((lat - (-27.490)) ** 2 + (lon - 152.945) ** 2) * 1500
+                )
+                valley2 = -40 * np.exp(
+                    -((lat - (-27.475)) ** 2 + (lon - 152.985) ** 2) * 1800
+                )
+
                 # Base elevation (Brisbane area is generally 50-100m above sea level)
-                base_elevation = 80 + 20 * np.sin((lat + 27.48) * 200) * np.cos((lon - 152.96) * 300)
-                
+                base_elevation = 80 + 20 * np.sin((lat + 27.48) * 200) * np.cos(
+                    (lon - 152.96) * 300
+                )
+
                 # Natural terrain variation
-                terrain_noise = 15 * np.sin((lat + 27.48) * 1000) * np.cos((lon - 152.96) * 1200)
-                small_features = 8 * np.sin((lat + 27.48) * 2000) * np.cos((lon - 152.96) * 2500)
-                
+                terrain_noise = (
+                    15 * np.sin((lat + 27.48) * 1000) * np.cos((lon - 152.96) * 1200)
+                )
+                small_features = (
+                    8 * np.sin((lat + 27.48) * 2000) * np.cos((lon - 152.96) * 2500)
+                )
+
                 # Combine all terrain features
-                elevation = (base_elevation + main_peak + ridge1 + ridge2 + ridge3 + 
-                           valley1 + valley2 + terrain_noise + small_features)
-                
+                elevation = (
+                    base_elevation
+                    + main_peak
+                    + ridge1
+                    + ridge2
+                    + ridge3
+                    + valley1
+                    + valley2
+                    + terrain_noise
+                    + small_features
+                )
+
                 # Ensure realistic elevation bounds for Brisbane area
                 elevation = max(20, min(350, elevation))
-                zi_grid[i,j] = elevation
-        
+                zi_grid[i, j] = elevation
+
         # Create trail line within Mt Coot-tha area
         trail_line = []
         for coord in trail_coords[::3]:  # Sample more trail points for better detail
             lat, lon = coord
             # Check if trail point is within Mt Coot-tha area
-            if (mt_coottha_bounds['lat_min'] <= lat <= mt_coottha_bounds['lat_max'] and 
-                mt_coottha_bounds['lon_min'] <= lon <= mt_coottha_bounds['lon_max']):
-                
+            if (
+                mt_coottha_bounds["lat_min"] <= lat <= mt_coottha_bounds["lat_max"]
+                and mt_coottha_bounds["lon_min"] <= lon <= mt_coottha_bounds["lon_max"]
+            ):
+
                 # Find closest grid point for elevation
                 i = int((lat - y_min) / (y_max - y_min) * (grid_size - 1))
                 j = int((lon - x_min) / (x_max - x_min) * (grid_size - 1))
                 i = max(0, min(grid_size - 1, i))
                 j = max(0, min(grid_size - 1, j))
-                
-                trail_line.append({
-                    'x': lon,
-                    'y': lat,
-                    'z': float(zi_grid[i, j] + 3)  # Slightly above terrain
-                })
+
+                trail_line.append(
+                    {
+                        "x": lon,
+                        "y": lat,
+                        "z": float(zi_grid[i, j] + 3),  # Slightly above terrain
+                    }
+                )
             else:
                 # For trail points outside Mt Coot-tha area, estimate elevation
-                trail_line.append({
-                    'x': lon,
-                    'y': lat,
-                    'z': 100.0  # Default elevation for points outside area
-                })
-        
+                trail_line.append(
+                    {
+                        "x": lon,
+                        "y": lat,
+                        "z": 100.0,  # Default elevation for points outside area
+                    }
+                )
+
         surface_data = {
-            'x': xi.tolist(),
-            'y': yi.tolist(),
-            'z': zi_grid.tolist(),
-            'bounds': {
-                'x_min': float(x_min),
-                'x_max': float(x_max),
-                'y_min': float(y_min),
-                'y_max': float(y_max),
-                'z_min': float(np.min(zi_grid)),
-                'z_max': float(np.max(zi_grid))
-            }
+            "x": xi.tolist(),
+            "y": yi.tolist(),
+            "z": zi_grid.tolist(),
+            "bounds": {
+                "x_min": float(x_min),
+                "x_max": float(x_max),
+                "y_min": float(y_min),
+                "y_max": float(y_max),
+                "z_min": float(np.min(zi_grid)),
+                "z_max": float(np.max(zi_grid)),
+            },
         }
-        
+
         return {
-            'surface': surface_data,
-            'trail_line': trail_line,
-            'metadata': {
-                'grid_size': grid_size,
-                'num_trail_points': len(trail_line),
-                'elevation_range': float(np.max(zi_grid) - np.min(zi_grid)),
-                'data_source': 'Mt Coot-tha Area Terrain',
-                'area_name': 'Mt Coot-tha, Brisbane',
-                'peak_elevation': f'{np.max(zi_grid):.0f}m'
-            }
+            "surface": surface_data,
+            "trail_line": trail_line,
+            "metadata": {
+                "grid_size": grid_size,
+                "num_trail_points": len(trail_line),
+                "elevation_range": float(np.max(zi_grid) - np.min(zi_grid)),
+                "data_source": "Mt Coot-tha Area Terrain",
+                "area_name": "Mt Coot-tha, Brisbane",
+                "peak_elevation": f"{np.max(zi_grid):.0f}m",
+            },
         }
-        
+
     except Exception as e:
         print(f"Error processing DEM data: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -592,35 +848,36 @@ async def get_similar_trails(trail_id: int, limit: int = 5):
     """Get trails similar to the specified trail"""
     try:
         # Get the target trail
-        target_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        target_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
         if not target_response.data:
             raise HTTPException(status_code=404, detail="Trail not found")
-        
+
         target_trail = target_response.data[0]
-        
+
         # Get all other trails
-        all_trails_response = supabase.table("trails").select("*").neq("id", trail_id).execute()
+        all_trails_response = (
+            supabase.table("trails").select("*").neq("id", trail_id).execute()
+        )
         all_trails = all_trails_response.data
-        
+
         # Calculate similarity scores
         similarities = []
         for trail in all_trails:
             similarity_score = calculate_trail_similarity(target_trail, trail)
-            similarities.append({
-                "trail": trail,
-                "similarity_score": similarity_score
-            })
-        
+            similarities.append({"trail": trail, "similarity_score": similarity_score})
+
         # Sort by similarity and return top results
         similarities.sort(key=lambda x: x["similarity_score"], reverse=True)
         similar_trails = similarities[:limit]
-        
+
         return {
             "success": True,
             "target_trail": target_trail["name"],
-            "similar_trails": similar_trails
+            "similar_trails": similar_trails,
         }
-        
+
     except Exception as e:
         print(f"Similar trails error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -632,33 +889,39 @@ async def get_analytics_overview():
     try:
         response = supabase.table("trails").select("*").execute()
         trails = response.data
-        
+
         if not trails:
             return {"success": True, "analytics": {"total_trails": 0}}
-        
+
         # Calculate aggregate statistics
-        total_distance = sum(trail.get('distance', 0) for trail in trails)
-        total_elevation_gain = sum(trail.get('elevation_gain', 0) for trail in trails)
-        avg_difficulty = sum(trail.get('difficulty_score', 0) for trail in trails) / len(trails)
-        
+        total_distance = sum(trail.get("distance", 0) for trail in trails)
+        total_elevation_gain = sum(trail.get("elevation_gain", 0) for trail in trails)
+        avg_difficulty = sum(
+            trail.get("difficulty_score", 0) for trail in trails
+        ) / len(trails)
+
         # Difficulty distribution
         difficulty_dist = {"Easy": 0, "Moderate": 0, "Hard": 0, "Extreme": 0}
         for trail in trails:
-            level = trail.get('difficulty_level', 'Unknown')
+            level = trail.get("difficulty_level", "Unknown")
             if level in difficulty_dist:
                 difficulty_dist[level] += 1
-        
+
         # Distance categories
-        distance_categories = {"Short (<5km)": 0, "Medium (5-15km)": 0, "Long (>15km)": 0}
+        distance_categories = {
+            "Short (<5km)": 0,
+            "Medium (5-15km)": 0,
+            "Long (>15km)": 0,
+        }
         for trail in trails:
-            distance = trail.get('distance', 0)
+            distance = trail.get("distance", 0)
             if distance < 5:
                 distance_categories["Short (<5km)"] += 1
             elif distance <= 15:
                 distance_categories["Medium (5-15km)"] += 1
             else:
                 distance_categories["Long (>15km)"] += 1
-        
+
         return {
             "success": True,
             "analytics": {
@@ -668,11 +931,15 @@ async def get_analytics_overview():
                 "avg_difficulty_score": round(avg_difficulty, 1),
                 "difficulty_distribution": difficulty_dist,
                 "distance_categories": distance_categories,
-                "most_challenging": max(trails, key=lambda t: t.get('difficulty_score', 0))['name'],
-                "longest_trail": max(trails, key=lambda t: t.get('distance', 0))['name']
-            }
+                "most_challenging": max(
+                    trails, key=lambda t: t.get("difficulty_score", 0)
+                )["name"],
+                "longest_trail": max(trails, key=lambda t: t.get("distance", 0))[
+                    "name"
+                ],
+            },
         }
-        
+
     except Exception as e:
         print(f"Analytics error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -683,44 +950,46 @@ async def get_trail_weather(trail_id: int):
     """Get live weather conditions and difficulty multiplier for a trail"""
     try:
         print(f"Getting weather data for trail ID: {trail_id}")
-        
+
         # Get the trail
-        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
         if not trail_response.data:
             raise HTTPException(status_code=404, detail="Trail not found")
-        
+
         trail = trail_response.data[0]
         print(f"Found trail: {trail.get('name', 'Unknown')}")
-        
+
         coordinates = trail.get("coordinates", [])
-        
+
         if not coordinates:
             raise HTTPException(status_code=400, detail="Trail has no coordinate data")
-        
+
         # Get midpoint coordinates for weather lookup
         mid_index = len(coordinates) // 2
         trail_coords = coordinates[mid_index]
         print(f"Using coordinates: {trail_coords}")
-        
+
         # Get live weather data (this would use a real weather API in production)
         weather_data = await get_live_weather_difficulty(trail_coords)
         print(f"Weather data: {weather_data}")
-        
+
         # Get static weather exposure info from stored score
         weather_score = trail.get("weather_difficulty_multiplier")
         if weather_score is None:
             weather_score = 1.0  # Default value
         weather_exposure = get_weather_exposure_from_score(weather_score)
-        
+
         # Safe difficulty calculation
         base_difficulty = trail.get("difficulty_score", 0)
         if base_difficulty is None:
             base_difficulty = 0
-        
+
         weather_multiplier = weather_data.get("multiplier", 1.0)
         if weather_multiplier is None:
             weather_multiplier = 1.0
-        
+
         result = {
             "success": True,
             "trail_name": trail.get("name", "Unknown Trail"),
@@ -730,18 +999,122 @@ async def get_trail_weather(trail_id: int):
             "updated_difficulty": {
                 "base_difficulty": base_difficulty,
                 "weather_adjusted": round(base_difficulty * weather_multiplier, 1),
-                "adjustment_explanation": f"Difficulty adjusted by {weather_multiplier}x due to current conditions"
-            }
+                "adjustment_explanation": f"Difficulty adjusted by {weather_multiplier}x due to current conditions",
+            },
         }
-        
+
         print(f"Returning result: {result}")
         return result
-        
+
     except Exception as e:
         print(f"Weather lookup error: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/trail/{trail_id}/surface-analysis")
+async def get_trail_surface_analysis(trail_id: int):
+    """Get detailed surface difficulty analysis for a trail"""
+    try:
+        # Get trail data
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
+        if not trail_response.data:
+            raise HTTPException(status_code=404, detail="Trail not found")
+
+        trail = trail_response.data[0]
+        coordinates = trail.get("coordinates", [])
+        elevation_profile = trail.get("elevation_profile", [])
+
+        if not coordinates:
+            raise HTTPException(status_code=400, detail="Trail has no coordinate data")
+
+        # Get surface analysis
+        surface_segments = trail.get("surface_segments")
+        surface_difficulty_score = trail.get("surface_difficulty_score", 1.0)
+        surface_description = trail.get(
+            "surface_description", "No surface analysis available"
+        )
+
+        # If no stored surface data, generate it
+        if not surface_segments:
+            surface_segments = estimate_surface_type_from_terrain(
+                coordinates, elevation_profile
+            )
+            surface_difficulty_score = calculate_surface_difficulty_score(
+                surface_segments
+            )
+            surface_description = get_surface_difficulty_description(
+                surface_difficulty_score, surface_segments
+            )
+
+        # Get detailed surface information
+        surface_details = []
+        for segment in surface_segments:
+            surface_type = segment["surface"]
+            percentage = segment["percentage"]
+            multiplier = get_surface_difficulty_multiplier(surface_type)
+
+            surface_details.append(
+                {
+                    "surface_type": surface_type.replace("_", " ").title(),
+                    "percentage": percentage,
+                    "difficulty_multiplier": multiplier,
+                    "description": get_surface_type_description(surface_type),
+                }
+            )
+
+        return {
+            "success": True,
+            "trail_name": trail.get("name", "Unknown Trail"),
+            "surface_analysis": {
+                "overall_difficulty_score": surface_difficulty_score,
+                "description": surface_description,
+                "surface_breakdown": surface_details,
+                "comparison_to_baseline": {
+                    "easier_than_baseline": surface_difficulty_score < 1.0,
+                    "percentage_difference": round(
+                        (surface_difficulty_score - 1.0) * 100, 1
+                    ),
+                },
+            },
+        }
+
+    except Exception as e:
+        print(f"Surface analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def get_surface_type_description(surface_type):
+    """Get detailed description of a surface type"""
+    descriptions = {
+        "paved": "Smooth paved roads or paths, excellent for all fitness levels",
+        "boardwalk": "Elevated wooden walkways, good footing with railings",
+        "concrete": "Concrete paths or sidewalks, smooth and predictable",
+        "dirt": "Well-packed dirt trails, the standard for hiking difficulty",
+        "gravel": "Small stones providing good traction, slightly uneven",
+        "grass": "Natural grass surfaces, may be uneven or soft",
+        "soil": "Loose earth that may be soft or muddy after rain",
+        "forest_floor": "Natural forest surface with leaves, twigs, and roots",
+        "crushed_stone": "Processed stone chips, can shift underfoot",
+        "wood_chips": "Soft wood chip trails, good cushioning but unstable",
+        "tall_grass": "Long grass and vegetation, may hide obstacles",
+        "sand": "Beach or desert sand, very tiring due to energy loss",
+        "mud": "Muddy conditions, slippery and energy-intensive",
+        "loose_gravel": "Unstable rocks that shift and slide underfoot",
+        "scree": "Loose rock fragments on slopes, requires careful footing",
+        "snow": "Snow-covered surfaces, may require special equipment",
+        "rock": "Rocky terrain requiring scrambling and route-finding",
+        "boulder": "Large rocks requiring climbing skills and balance",
+        "swamp": "Wet, unstable ground with potential hazards",
+        "ice": "Icy conditions requiring crampons or microspikes",
+        "unknown": "Surface conditions not determined",
+    }
+
+    return descriptions.get(surface_type, "No description available")
 
 
 @app.get("/trail/{trail_id}/dem3d")
@@ -749,44 +1122,51 @@ async def get_trail_3d_dem(trail_id: int):
     """Get 3D DEM data for a specific trail"""
     try:
         print(f"Getting 3D DEM data for trail ID: {trail_id}")
-        
+
         # Get the trail from database
-        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
         if not trail_response.data:
             raise HTTPException(status_code=404, detail="Trail not found")
-        
+
         trail = trail_response.data[0]
         trail_coords = trail.get("coordinates", [])
-        
+
         if not trail_coords:
             raise HTTPException(status_code=400, detail="Trail has no coordinate data")
-        
-        print(f"Processing DEM for trail: {trail.get('name', 'Unknown')} with {len(trail_coords)} coordinates")
-        
+
+        print(
+            f"Processing DEM for trail: {trail.get('name', 'Unknown')} with {len(trail_coords)} coordinates"
+        )
+
         # Find relevant DEM tiles
         dem_files = find_relevant_dem_tiles(trail_coords)
         if not dem_files:
-            raise HTTPException(status_code=404, detail="No DEM data available for this trail area")
-        
+            raise HTTPException(
+                status_code=404, detail="No DEM data available for this trail area"
+            )
+
         print(f"Found {len(dem_files)} DEM files")
-        
+
         # Process DEM data
         dem_data = process_dem_for_trail(trail_coords, dem_files)
         if not dem_data:
             raise HTTPException(status_code=500, detail="Failed to process DEM data")
-        
+
         return {
             "success": True,
             "trail_name": trail.get("name", "Unknown Trail"),
             "trail_id": trail_id,
-            "dem_data": dem_data
+            "dem_data": dem_data,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         print(f"3D DEM error: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1029,11 +1409,31 @@ async def upload_gpx(file: UploadFile = File(...)):
         # Rolling hills index (advanced)
         rolling_hills_index = round(analyze_rolling_hills(elevations, distances), 2)
 
+        # Surface difficulty analysis
+        elevation_profile_data = [
+            {
+                "distance": round(dist, 2),
+                "elevation": round(ele, 1),
+                "slope": round(slopes[i] if i < len(slopes) else 0, 2),
+            }
+            for i, (dist, ele) in enumerate(zip(distances, elevations))
+        ]
+
+        surface_segments = estimate_surface_type_from_terrain(
+            coords, elevation_profile_data
+        )
+        surface_difficulty_score = calculate_surface_difficulty_score(surface_segments)
+        surface_description = get_surface_difficulty_description(
+            surface_difficulty_score, surface_segments
+        )
+
         # Slope analysis
         if slopes and len(slopes) > 1:  # Skip first element (always 0)
             slope_values = slopes[1:]  # Skip the initial 0
             max_slope = max(slope_values) if slope_values else 0
-            avg_slope = sum(map(abs, slope_values)) / len(slope_values) if slope_values else 0
+            avg_slope = (
+                sum(map(abs, slope_values)) / len(slope_values) if slope_values else 0
+            )
         else:
             max_slope = 0
             avg_slope = 0
@@ -1046,8 +1446,11 @@ async def upload_gpx(file: UploadFile = File(...)):
             while seg_start_idx < len(distances) - 1:
                 seg_end_idx = seg_start_idx
                 # Find the end index for this segment
-                while (seg_end_idx < len(distances) - 1 and
-                       distances[seg_end_idx] - distances[seg_start_idx] < segment_length):
+                while (
+                    seg_end_idx < len(distances) - 1
+                    and distances[seg_end_idx] - distances[seg_start_idx]
+                    < segment_length
+                ):
                     seg_end_idx += 1
                 # Calculate stats for this segment
                 seg_dist = distances[seg_end_idx] - distances[seg_start_idx]
@@ -1057,19 +1460,29 @@ async def upload_gpx(file: UploadFile = File(...)):
                     seg_slope = (seg_elev_change / (seg_dist * 1000)) * 100
                 else:
                     seg_slope = 0
-                segments.append({
-                    "start_distance": round(distances[seg_start_idx], 2),
-                    "end_distance": round(distances[seg_end_idx], 2),
-                    "elevation_change": round(seg_elev_change, 1),
-                    "avg_slope": round(seg_slope, 2)
-                })
+                segments.append(
+                    {
+                        "start_distance": round(distances[seg_start_idx], 2),
+                        "end_distance": round(distances[seg_end_idx], 2),
+                        "elevation_change": round(seg_elev_change, 1),
+                        "avg_slope": round(seg_slope, 2),
+                    }
+                )
                 seg_start_idx = seg_end_idx
 
-        # Simple difficulty calculation
+        # Enhanced difficulty calculation including surface type
         distance_factor = min(total_distance / 10, 1) * 3
         elevation_factor = min(elevation_gain / 1000, 1) * 4
         rolling_factor = rolling_hills_index * 3
-        difficulty_score = distance_factor + elevation_factor + rolling_factor
+        surface_factor = (
+            surface_difficulty_score - 1.0
+        ) * 2  # Surface difficulty adjustment
+
+        # Base difficulty score
+        base_difficulty_score = distance_factor + elevation_factor + rolling_factor
+
+        # Apply surface difficulty multiplier
+        difficulty_score = base_difficulty_score * surface_difficulty_score
 
         if difficulty_score <= 3:
             difficulty_level = "Easy"
@@ -1119,11 +1532,16 @@ async def upload_gpx(file: UploadFile = File(...)):
         # Create new trail data for Supabase
         weather_exposure = get_trail_weather_exposure({"max_elevation": max_elevation})
         terrain_variety = calculate_terrain_variety(elevations)
-        
+
         # Convert weather exposure to a numeric score for database compatibility
-        exposure_scores = {"Low": 1.0, "Low-Moderate": 1.1, "Moderate": 1.2, "High": 1.3}
+        exposure_scores = {
+            "Low": 1.0,
+            "Low-Moderate": 1.1,
+            "Moderate": 1.2,
+            "High": 1.3,
+        }
         weather_score = exposure_scores.get(weather_exposure["exposure_level"], 1.0)
-        
+
         new_trail_data = {
             "name": trail_name,
             "distance": round(total_distance, 2),
@@ -1135,25 +1553,32 @@ async def upload_gpx(file: UploadFile = File(...)):
             "difficulty_score": round(difficulty_score, 1),
             "difficulty_level": difficulty_level,
             "coordinates": coords,
-            "elevation_profile": [
-                {
-                    "distance": round(dist, 2), 
-                    "elevation": round(ele, 1),
-                    "slope": round(slopes[i] if i < len(slopes) else 0, 2)
-                }
-                for i, (dist, ele) in enumerate(zip(distances, elevations))
-            ],
+            "elevation_profile": elevation_profile_data,
             "max_slope": round(max_slope, 2),
             "avg_slope": round(avg_slope, 2),
             "segments": segments,
-            # Enhanced effort estimation using Naismith's Rule + terrain adjustments
-            "estimated_time_hours": round((total_distance / 5) + (elevation_gain / 600) + (rolling_hills_index * 0.5), 2),
+            # Enhanced effort estimation using Naismith's Rule + terrain adjustments + surface difficulty
+            "estimated_time_hours": round(
+                (
+                    (total_distance / 5)
+                    + (elevation_gain / 600)
+                    + (rolling_hills_index * 0.5)
+                )
+                * surface_difficulty_score,
+                2,
+            ),
+            # Surface difficulty information
+            "surface_difficulty_score": round(surface_difficulty_score, 2),
+            "surface_segments": surface_segments,
+            "surface_description": surface_description,
             # Improved analytics fields (using existing column names)
             "terrain_variety_score": terrain_variety,
             "elevation_change_total": int(round(elevation_gain + elevation_loss, 0)),
             # Store weather data in existing numeric fields, we'll interpret on frontend
             "weather_difficulty_multiplier": weather_score,  # Use existing column with new meaning
-            "technical_rating": min(10, int(max_slope / 10 + rolling_hills_index * 5 + 1)),  # 1-10 technical difficulty
+            "technical_rating": min(
+                10, int(max_slope / 10 + rolling_hills_index * 5 + surface_factor + 1)
+            ),  # 1-10 technical difficulty
         }
 
         # Insert trail into Supabase database
