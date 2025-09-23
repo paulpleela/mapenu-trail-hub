@@ -758,53 +758,6 @@ async def get_trail_weather(trail_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/trail/{trail_id}/dem3d")
-async def get_trail_3d_dem(trail_id: int):
-    """Get 3D DEM data for a specific trail"""
-    try:
-        print(f"Getting 3D DEM data for trail ID: {trail_id}")
-        
-        # Get the trail from database
-        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
-        if not trail_response.data:
-            raise HTTPException(status_code=404, detail="Trail not found")
-        
-        trail = trail_response.data[0]
-        trail_coords = trail.get("coordinates", [])
-        
-        if not trail_coords:
-            raise HTTPException(status_code=400, detail="Trail has no coordinate data")
-        
-        print(f"Processing DEM for trail: {trail.get('name', 'Unknown')} with {len(trail_coords)} coordinates")
-        
-        # Find relevant DEM tiles
-        dem_files = find_relevant_dem_tiles(trail_coords)
-        if not dem_files:
-            raise HTTPException(status_code=404, detail="No DEM data available for this trail area")
-        
-        print(f"Found {len(dem_files)} DEM files")
-        
-        # Process DEM data
-        dem_data = process_dem_for_trail(trail_coords, dem_files)
-        if not dem_data:
-            raise HTTPException(status_code=500, detail="Failed to process DEM data")
-        
-        return {
-            "success": True,
-            "trail_name": trail.get("name", "Unknown Trail"),
-            "trail_id": trail_id,
-            "dem_data": dem_data
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"3D DEM error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/map")
 async def get_map():
     """Generate map with all trails from Supabase"""

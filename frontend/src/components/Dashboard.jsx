@@ -26,7 +26,6 @@ import {
   RefreshCw,
   Database,
 } from "lucide-react";
-import DEM3DViewer from "./DEM3DViewer";
 
 // API URL
 const API_BASE_URL = "http://localhost:8000";
@@ -1467,37 +1466,6 @@ export default function Dashboard() {
                           </div>
                         </div>
                       )}
-                    </div>
-                  </CardContent>
-
-                   {/* 3D DEM Visualization */}
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-3 text-xl">
-                      <div className="p-3 bg-indigo-100 rounded-xl">
-                        <Mountain className="w-6 h-6 text-indigo-600" />
-                      </div>
-                      Point Cloud Terrain Analysis
-                    </CardTitle>
-                    <p className="text-gray-600 text-sm mt-2">
-                      Interactive 3D view of the trail overlaid on high-resolution
-                      terrain data
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <DEM3DViewer
-                      trailId={selectedTrail?.id}
-                      isVisible={!!selectedTrail}
-                    />
-                    <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                      <p className="font-medium mb-1">📍 Data Source:</p>
-                      <p>
-                        Queensland Government 1-meter resolution Digital Elevation
-                        Model (LiDAR)
-                      </p>
-                      <p className="mt-2">
-                        <span className="inline-block w-3 h-1 bg-red-500 mr-2"></span>
-                        Trail path overlaid on terrain surface
-                      </p>
                     </div>
                   </CardContent>
                 </Card>
