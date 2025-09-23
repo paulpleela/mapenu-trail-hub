@@ -304,9 +304,10 @@ export default function Dashboard() {
   // Load DEM data when trail is selected
   useEffect(() => {
     if (selectedTrail?.id) {
-      loadDemData(selectedTrail.id);
       // Clear previous 3D terrain when selecting new trail
       setTerrain3D(null);
+      loadDemData(selectedTrail.id);
+      load3DTerrain(selectedTrail.id); // Auto-generate 3D terrain view
     }
   }, [selectedTrail]);
 
@@ -352,8 +353,7 @@ export default function Dashboard() {
   const [demCoverage, setDemCoverage] = useState(null);
   const [terrain3D, setTerrain3D] = useState(null);
   const [loading3D, setLoading3D] = useState(false);
-  const [demOverlayMap, setDemOverlayMap] = useState(null);
-  const [loadingDemMap, setLoadingDemMap] = useState(false);
+
 
   const loadDemData = async (trailId) => {
     try {
@@ -391,25 +391,7 @@ export default function Dashboard() {
     }
   };
 
-  const loadDemOverlayMap = async (trailId) => {
-    if (!trailId) return;
-    
-    setLoadingDemMap(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/trail/${trailId}/dem-overlay-map`);
-      const data = await response.json();
-      if (data.success) {
-        setDemOverlayMap(data);
-      } else {
-        setDemOverlayMap({ error: data.error });
-      }
-    } catch (err) {
-      console.error("Failed to load DEM overlay map:", err);
-      setDemOverlayMap({ error: "Failed to generate DEM overlay map" });
-    } finally {
-      setLoadingDemMap(false);
-    }
-  };
+
 
   const loadDemCoverage = async () => {
     try {
@@ -1365,50 +1347,18 @@ export default function Dashboard() {
                             </div>
                           )}
 
-                          {/* DEM Elevation Overlay Map */}
+                          {/* 3D Terrain Visualization */}
                           <div className="bg-white rounded-lg p-4">
                             <div className="flex items-center justify-between mb-3">
-                              <h5 className="font-semibold text-gray-800">Interactive Elevation Map</h5>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => loadDemOverlayMap(selectedTrail.id)}
-                                  disabled={loadingDemMap}
-                                  className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:bg-gray-400"
-                                >
-                                  {loadingDemMap ? 'Loading...' : 'Show Elevation Map'}
-                                </button>
-                                <button
-                                  onClick={() => load3DTerrain(selectedTrail.id)}
-                                  disabled={loading3D}
-                                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:bg-gray-400"
-                                >
-                                  {loading3D ? 'Generating...' : 'Generate 3D View'}
-                                </button>
-                              </div>
+                              <h5 className="font-semibold text-gray-800">3D Terrain Visualization</h5>
+                              {loading3D && (
+                                <div className="flex items-center text-blue-600 text-xs">
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                                  Generating...
+                                </div>
+                              )}
                             </div>
                             
-                            {demOverlayMap?.map_url ? (
-                              <div className="mb-4">
-                                <div className="w-full h-96 rounded-lg overflow-hidden border shadow-lg">
-                                  <iframe
-                                    src={`${API_BASE_URL}${demOverlayMap.map_url}`}
-                                    className="w-full h-full border-0"
-                                    title="DEM Elevation Overlay Map"
-                                    sandbox="allow-scripts allow-same-origin allow-popups"
-                                    loading="lazy"
-                                  />
-                                </div>
-                                <p className="text-xs text-gray-600 mt-2 text-center">
-                                  🗺️ Interactive map with elevation-colored trail segments • 
-                                  {demOverlayMap.has_dem_data ? ' Real DEM data' : ' Basic trail view'}
-                                </p>
-                              </div>
-                            ) : demOverlayMap?.error ? (
-                              <div className="text-center py-4">
-                                <p className="text-red-600 text-sm">{demOverlayMap.error}</p>
-                              </div>
-                            ) : null}
-
                             {terrain3D?.visualization_type === 'interactive' && terrain3D?.visualization_html ? (
                               <div className="text-center">
                                 <div className="w-full h-150 rounded-lg border shadow-lg overflow-hidden">
@@ -1439,11 +1389,11 @@ export default function Dashboard() {
                               <div className="text-center py-4">
                                 <p className="text-red-600 text-sm">{terrain3D.error}</p>
                               </div>
-                            ) : !terrain3D && !demOverlayMap ? (
+                            ) : !terrain3D ? (
                               <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
                                 <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                                <p>Click buttons above to visualize trail elevation data</p>
-                                <p className="text-xs mt-1">Interactive map shows elevation-colored trail segments</p>
+                                <p>3D terrain visualization will appear here</p>
+                                <p className="text-xs mt-1">Shows trail path over real DEM elevation data</p>
                               </div>
                             ) : null}
                           </div>
