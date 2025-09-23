@@ -865,30 +865,7 @@ async def get_map():
             
             m.fit_bounds(bounds)
         
-        # Add layer control for different map views
         folium.TileLayer('OpenStreetMap').add_to(m)
-        folium.TileLayer(
-            'Stamen Terrain', 
-            name='Terrain',
-            attr='Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.'
-        ).add_to(m)
-        folium.TileLayer(
-            'CartoDB positron', 
-            name='Light',
-            attr='&copy; OpenStreetMap contributors &copy; CARTO'
-        ).add_to(m)
-        folium.LayerControl().add_to(m)
-        
-        # Add fullscreen control
-        Fullscreen(
-            position="topright",
-            title="Expand me",
-            title_cancel="Exit me",
-            force_separate_button=True,
-        ).add_to(m)
-        
-        # Add measure control for distance measurements
-        MeasureControl(primary_length_unit="kilometers").add_to(m)
 
         # Add JavaScript for trail click handling
         trail_data_js = f"""
