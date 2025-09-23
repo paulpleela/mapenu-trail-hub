@@ -26,7 +26,6 @@ import {
   RefreshCw,
   Database,
 } from "lucide-react";
-import DEM3DViewer from "./DEM3DViewer";
 
 // API URL
 const API_BASE_URL = "http://localhost:8000";
@@ -193,12 +192,14 @@ const FoliumMap = ({ onTrailClick, trails }) => {
   }
 
   return (
-    <div className="w-full h-full rounded-lg overflow-hidden border">
+    <div className="w-full h-full rounded-lg overflow-hidden border shadow-lg">
       <iframe
         src={`${API_BASE_URL}${mapUrl}`}
         className="w-full h-full border-0"
-        title="Trail Map"
-        sandbox="allow-scripts allow-same-origin"
+        title="Interactive Trail Map"
+        sandbox="allow-scripts allow-same-origin allow-popups"
+        style={{ minHeight: '500px' }}
+        loading="lazy"
       />
     </div>
   );
@@ -297,7 +298,18 @@ export default function Dashboard() {
   useEffect(() => {
     loadTrails();
     loadAnalytics();
+    loadDemCoverage();
   }, []);
+
+  // Load DEM data when trail is selected
+  useEffect(() => {
+    if (selectedTrail?.id) {
+      // Clear previous 3D terrain when selecting new trail
+      setTerrain3D(null);
+      loadDemData(selectedTrail.id);
+      load3DTerrain(selectedTrail.id); // Auto-generate 3D terrain view
+    }
+  }, [selectedTrail]);
 
   const loadAnalytics = async () => {
     try {
@@ -334,6 +346,63 @@ export default function Dashboard() {
     } catch (err) {
       console.error("Failed to load weather data:", err);
       setWeatherData(null);
+    }
+  };
+
+  const [demData, setDemData] = useState(null);
+  const [demCoverage, setDemCoverage] = useState(null);
+  const [terrain3D, setTerrain3D] = useState(null);
+  const [loading3D, setLoading3D] = useState(false);
+
+
+  const loadDemData = async (trailId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/trail/${trailId}/dem-analysis`);
+      const data = await response.json();
+      if (data.success) {
+        setDemData(data);
+      } else {
+        console.error("DEM analysis failed:", data.error);
+        setDemData({ error: data.error });
+      }
+    } catch (err) {
+      console.error("Failed to load DEM data:", err);
+      setDemData({ error: "Failed to connect to DEM analysis service" });
+    }
+  };
+
+  const load3DTerrain = async (trailId) => {
+    if (!trailId) return;
+    
+    setLoading3D(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/trail/${trailId}/3d-terrain`);
+      const data = await response.json();
+      if (data.success) {
+        setTerrain3D(data);
+      } else {
+        setTerrain3D({ error: data.error });
+      }
+    } catch (err) {
+      console.error("Failed to load 3D terrain:", err);
+      setTerrain3D({ error: "Failed to generate 3D visualization" });
+    } finally {
+      setLoading3D(false);
+    }
+  };
+
+
+
+  const loadDemCoverage = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/dem/coverage`);
+      const data = await response.json();
+      if (data.success) {
+        setDemCoverage(data.coverage);
+      }
+    } catch (err) {
+      console.error("Failed to load DEM coverage:", err);
+      setDemCoverage(null);
     }
   };
 
@@ -394,6 +463,7 @@ export default function Dashboard() {
       setSelectedTrail(trail);
       loadSimilarTrails(trail.id); // Load similar trails
       loadWeatherData(trail.id); // Load live weather data
+      loadDemData(trail.id); // Load DEM analysis data
     } else {
       // Create a temporary trail object from the clicked data
       const tempTrail = {
@@ -413,6 +483,7 @@ export default function Dashboard() {
       if (tempTrail.id) {
         loadSimilarTrails(tempTrail.id);
         loadWeatherData(tempTrail.id);
+        loadDemData(tempTrail.id);
       }
     }
   };
@@ -960,39 +1031,6 @@ export default function Dashboard() {
               </Card>
             </div>
 
-            {/* 3D DEM Visualization */}
-            <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-3 text-xl">
-                  <div className="p-3 bg-indigo-100 rounded-xl">
-                    <Mountain className="w-6 h-6 text-indigo-600" />
-                  </div>
-                  3D Terrain Visualization
-                </CardTitle>
-                <p className="text-gray-600 text-sm mt-2">
-                  Interactive 3D view of the trail overlaid on high-resolution
-                  terrain data
-                </p>
-              </CardHeader>
-              <CardContent>
-                <DEM3DViewer
-                  trailId={selectedTrail?.id}
-                  isVisible={!!selectedTrail}
-                />
-                <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                  <p className="font-medium mb-1">📍 Data Source:</p>
-                  <p>
-                    Queensland Government 1-meter resolution Digital Elevation
-                    Model (LiDAR)
-                  </p>
-                  <p className="mt-2">
-                    <span className="inline-block w-3 h-1 bg-red-500 mr-2"></span>
-                    Trail path overlaid on terrain surface
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Trail Statistics */}
             {/* Terrain Difficulty */}
             <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
@@ -1180,6 +1218,208 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             )}
+
+              {/* Enhanced DEM/LiDAR Analysis Section */}
+              {selectedTrail && (
+                <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-3 text-xl">
+                      <div className="p-3 bg-indigo-100 rounded-xl">
+                        <Mountain className="w-6 h-6 text-indigo-600" />
+                      </div>
+                      High-Resolution Terrain Data
+                      <span className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                        DEM + LiDAR
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Mountain className="w-6 h-6 text-green-600" />
+                        <h4 className="font-semibold text-gray-800 text-lg">Real-Time DEM Analysis</h4>
+                        {selectedTrail?.id && (
+                          <button
+                            onClick={() => loadDemData(selectedTrail.id)}
+                            className="ml-auto p-1 hover:bg-green-200 rounded text-green-600"
+                            title="Refresh DEM analysis"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      
+                      {demData?.error ? (
+                        <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-4">
+                          <p className="text-yellow-800 font-semibold">⚠️ DEM Analysis Unavailable</p>
+                          <p className="text-yellow-700 text-sm mt-1">{demData.error}</p>
+                          <p className="text-yellow-600 text-xs mt-2">
+                            Ensure your 6GB DEM files are properly located and rasterio is installed.
+                          </p>
+                        </div>
+                      ) : demData?.success ? (
+                        <div className="space-y-4">
+                          {/* Elevation Profile Analysis */}
+                          {demData.elevation_analysis?.elevation_profile && (
+                            <div className="bg-white rounded-lg p-4">
+                              <h5 className="font-semibold text-gray-800 mb-3">High-Resolution Elevation Profile</h5>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                  <span className="text-gray-600">Sample Points:</span>
+                                  <span className="font-bold text-blue-600 ml-2">
+                                    {demData.elevation_analysis.elevation_profile.elevations.length}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">Resolution:</span>
+                                  <span className="font-bold text-green-600 ml-2">
+                                    {demData.elevation_analysis.sample_interval}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">Max Elevation:</span>
+                                  <span className="font-bold text-purple-600 ml-2">
+                                    {demData.elevation_analysis.statistics.max_elevation.toFixed(1)}m
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">Min Elevation:</span>
+                                  <span className="font-bold text-indigo-600 ml-2">
+                                    {demData.elevation_analysis.statistics.min_elevation.toFixed(1)}m
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Terrain Features */}
+                          {demData.terrain_features?.success && (
+                            <div className="bg-white rounded-lg p-4">
+                              <h5 className="font-semibold text-gray-800 mb-3">Identified Terrain Features</h5>
+                              {demData.terrain_features.features.length > 0 ? (
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                  {demData.terrain_features.features.slice(0, 10).map((feature, idx) => (
+                                    <div key={idx} className="flex items-center justify-between text-sm border-b border-gray-100 pb-1">
+                                      <span className="font-medium text-gray-700">
+                                        {feature.type}
+                                      </span>
+                                      <span className="text-gray-600">
+                                        {feature.elevation ? `${feature.elevation.toFixed(1)}m` : 
+                                         feature.slope ? `${feature.slope.toFixed(1)}%` : ''}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        {feature.distance ? `${feature.distance.toFixed(0)}m` : ''}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {demData.terrain_features.features.length > 10 && (
+                                    <p className="text-xs text-gray-500 text-center">
+                                      +{demData.terrain_features.features.length - 10} more features
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-gray-500 text-sm">No significant terrain features detected</p>
+                              )}
+                              
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-blue-600">
+                                      {demData.terrain_features.summary?.peaks || 0}
+                                    </div>
+                                    <div className="text-gray-600">Peaks</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-green-600">
+                                      {demData.terrain_features.summary?.valleys || 0}
+                                    </div>
+                                    <div className="text-gray-600">Valleys</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="text-lg font-bold text-red-600">
+                                      {demData.terrain_features.summary?.steep_sections || 0}
+                                    </div>
+                                    <div className="text-gray-600">Steep Grades</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 3D Terrain Visualization */}
+                          <div className="bg-white rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="font-semibold text-gray-800">3D Terrain Visualization</h5>
+                              {loading3D && (
+                                <div className="flex items-center text-blue-600 text-xs">
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                                  Generating...
+                                </div>
+                              )}
+                            </div>
+                            
+                            {terrain3D?.visualization_type === 'interactive' && terrain3D?.visualization_html ? (
+                              <div className="text-center">
+                                <div className="w-full h-150 rounded-lg border shadow-lg overflow-hidden">
+                                  <iframe
+                                    src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
+                                    className="w-full h-full border-0"
+                                    title="Interactive 3D Terrain Visualization"
+                                    sandbox="allow-scripts allow-same-origin"
+                                    loading="lazy"
+                                  />
+                                </div>
+                                <p className="text-xs text-gray-600 mt-2">
+                                  🎮 Interactive 3D terrain - Click and drag to rotate, scroll to zoom
+                                </p>
+                              </div>
+                            ) : terrain3D?.visualization ? (
+                              <div className="text-center">
+                                <img 
+                                  src={terrain3D.visualization} 
+                                  alt="3D Terrain Visualization"
+                                  className="max-w-full h-auto rounded-lg border"
+                                />
+                                <p className="text-xs text-gray-600 mt-2">
+                                  3D terrain model showing trail path over DEM data
+                                </p>
+                              </div>
+                            ) : terrain3D?.error ? (
+                              <div className="text-center py-4">
+                                <p className="text-red-600 text-sm">{terrain3D.error}</p>
+                              </div>
+                            ) : !terrain3D ? (
+                              <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                                <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                                <p>3D terrain visualization will appear here</p>
+                                <p className="text-xs mt-1">Shows trail path over real DEM elevation data</p>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {/* Data Quality Info */}
+                          <div className="bg-gradient-to-r from-blue-100 to-green-100 rounded-lg p-3">
+                            <p className="text-sm text-gray-700">
+                              <strong>Data Sources:</strong> {demData.elevation_analysis?.data_sources?.length || 0} DEM tiles • 
+                              <strong> Resolution:</strong> {demData.data_quality?.resolution} • 
+                              <strong> Accuracy:</strong> {demData.data_quality?.accuracy}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-8">
+                          <div className="animate-pulse">
+                            <Database className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <p className="text-gray-500">Analyzing 6GB of high-resolution DEM data...</p>
+                            <p className="text-gray-400 text-xs mt-2">Processing Brisbane Government elevation tiles</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
           </>
         ) : (
           <Card className="shadow-lg border-0 bg-gradient-to-br from-gray-50 to-white">
