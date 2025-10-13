@@ -149,4 +149,6 @@ pip-delete-this-directory.txt
 *.local.json
 local_config.*
 
-data/
+# data/
+backend/data/QSpatial/DEM
+backend/data/QSpatial/metadata

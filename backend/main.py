@@ -32,7 +32,7 @@ try:
     from real_dem_analysis import RealDEMAnalyzer
 
     dem_path = os.path.join(
-        os.path.dirname(__file__), "data", "QLD Government", "DEM", "1 Metre"
+        os.path.dirname(__file__), "data", "QSpatial", "DEM", "1 Metre"
     )
     dem_analyzer = RealDEMAnalyzer(dem_path)
     print(f"DEM Analyzer initialized with {len(dem_analyzer.dem_files)} DEM files")
@@ -535,7 +535,7 @@ def find_relevant_dem_tiles(trail_coords):
     # Tile naming follows pattern: Brisbane_YYYY_LGA_SW_EASTING_NORTHING_1K_DEM_1m.tif
 
     relevant_tiles = []
-    dem_dir = os.path.join("data", "QLD Government", "DEM", "1 Metre")
+    dem_dir = os.path.join("data", "QSpatial", "DEM", "1 Metre")
 
     if not os.path.exists(dem_dir):
         print(f"DEM directory not found: {dem_dir}")
@@ -1768,7 +1768,7 @@ async def get_dem_coverage():
                 "success": False,
                 "error": "DEM analyzer not available",
                 "troubleshooting": {
-                    "check_path": "backend/data/QLD Government/DEM/1 Metre",
+                    "check_path": "backend/data/QSpatial/DEM/1 Metre",
                     "required_packages": ["rasterio", "geopandas", "pyproj"],
                     "file_format": ".tif files",
                 },
