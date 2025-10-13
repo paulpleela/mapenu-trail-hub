@@ -1382,7 +1382,7 @@ export default function Dashboard() {
                             
                             {terrain3D?.visualization_type === 'interactive' && terrain3D?.visualization_html ? (
                               <div className="text-center">
-                                <div className="w-full h-150 rounded-lg border shadow-lg overflow-hidden">
+                                <div className="w-full h-screen rounded-lg border shadow-lg overflow-hidden">
                                   <iframe
                                     src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
                                     className="w-full h-full border-0"
