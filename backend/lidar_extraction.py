@@ -1,36 +1,147 @@
 """
 LiDAR Elevation Profile Extraction Module
 Extracts elevation profiles from .las LiDAR point cloud files
+Now supports Supabase Storage with local caching
 """
 
 import laspy
 import numpy as np
 from scipy.spatial import cKDTree
 from pyproj import Transformer
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 import os
+import requests
 
 
 class LiDARExtractor:
-    def __init__(self, lidar_base_path: str):
+    def __init__(self, lidar_base_path: str = None, supabase_client=None):
         """
         Initialize LiDAR extractor
 
         Args:
-            lidar_base_path: Path to directory containing .las files
+            lidar_base_path: Path to directory for local cache (default: /tmp/lidar_cache)
+            supabase_client: Supabase client instance for database queries
         """
-        self.lidar_base_path = lidar_base_path
+        # Set up cache directory
+        self.lidar_base_path = lidar_base_path or "/tmp/lidar_cache"
+        os.makedirs(self.lidar_base_path, exist_ok=True)
+
+        # Store supabase client for database queries
+        self.supabase = supabase_client
+
+        # Find local files and load from database
         self.lidar_files = self._find_lidar_files()
         print(f"Found {len(self.lidar_files)} LiDAR files")
 
-    def _find_lidar_files(self) -> List[str]:
-        """Find all .las files in the directory"""
-        las_files = []
-        for root, dirs, files in os.walk(self.lidar_base_path):
-            for file in files:
-                if file.endswith(".las"):
-                    las_files.append(os.path.join(root, file))
-        return las_files
+    def _find_lidar_files(self) -> List[Dict[str, Any]]:
+        """
+        Find all LiDAR files from database and local cache
+        Returns list of dicts with file metadata including URLs
+        """
+        lidar_records = []
+
+        # Try to get files from Supabase database
+        if self.supabase:
+            try:
+                response = self.supabase.table("lidar_files").select("*").execute()
+                if response.data:
+                    lidar_records = response.data
+                    print(f"📊 Loaded {len(lidar_records)} LiDAR records from database")
+            except Exception as e:
+                print(f"⚠️  Could not load LiDAR files from database: {e}")
+
+        # Also check for local files (legacy/fallback)
+        local_files = []
+        if os.path.exists(self.lidar_base_path):
+            for root, dirs, files in os.walk(self.lidar_base_path):
+                for file in files:
+                    if file.endswith(".las"):
+                        file_path = os.path.join(root, file)
+                        # Add as legacy record if not already in database
+                        if not any(r.get("filename") == file for r in lidar_records):
+                            local_files.append(
+                                {
+                                    "filename": file,
+                                    "file_path": file_path,
+                                    "file_url": None,
+                                    "source": "local_cache",
+                                }
+                            )
+
+        if local_files:
+            print(f"📁 Found {len(local_files)} local LiDAR files")
+            lidar_records.extend(local_files)
+
+        return lidar_records
+
+    def _download_lidar_file(self, file_url: str, local_cache_path: str) -> str:
+        """
+        Download LiDAR file from Supabase Storage if not cached locally
+
+        Args:
+            file_url: Supabase Storage URL or file path
+            local_cache_path: Local path to cache the file
+
+        Returns:
+            Path to local cached file
+        """
+        # If already cached, return immediately
+        if os.path.exists(local_cache_path):
+            print(f"💾 Using cached LiDAR file: {os.path.basename(local_cache_path)}")
+            return local_cache_path
+
+        print(f"☁️  Downloading LiDAR file from Supabase Storage...")
+
+        try:
+            # Download from URL
+            response = requests.get(file_url, stream=True, timeout=300)
+            response.raise_for_status()
+
+            # Save to cache
+            os.makedirs(os.path.dirname(local_cache_path), exist_ok=True)
+            file_size = 0
+            with open(local_cache_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    file_size += len(chunk)
+
+            print(
+                f"✅ Cached LiDAR file: {os.path.basename(local_cache_path)} ({file_size/1024/1024:.1f} MB)"
+            )
+            return local_cache_path
+
+        except Exception as e:
+            print(f"❌ Error downloading LiDAR file: {e}")
+            raise
+
+    def _get_local_file_path(self, lidar_record: Dict[str, Any]) -> Optional[str]:
+        """
+        Get local file path for a LiDAR record, downloading from storage if needed
+
+        Args:
+            lidar_record: Dictionary with file metadata (file_url, filename, file_path)
+
+        Returns:
+            Local file path or None if file not accessible
+        """
+        filename = lidar_record.get("filename")
+        file_url = lidar_record.get("file_url")
+        file_path = lidar_record.get("file_path")
+
+        # If we have a local file_path and it exists, use it
+        if file_path and os.path.exists(file_path):
+            return file_path
+
+        # Otherwise, we need to download from file_url
+        if file_url:
+            cache_path = os.path.join(self.lidar_base_path, filename)
+            try:
+                return self._download_lidar_file(file_url, cache_path)
+            except Exception as e:
+                print(f"⚠️  Could not download {filename}: {e}")
+                return None
+
+        return None
 
     def _coords_to_mga56(self, coords: List[List[float]]) -> List[Tuple[float, float]]:
         """
@@ -52,7 +163,7 @@ class LiDARExtractor:
 
     def find_matching_lidar_file(
         self, trail_coords: List[List[float]], trail_name: str = None
-    ) -> str:
+    ) -> Optional[Dict[str, Any]]:
         """
         Find LiDAR file that best matches the trail coordinates
 
@@ -61,7 +172,7 @@ class LiDARExtractor:
             trail_name: Optional trail name to help with matching
 
         Returns:
-            Path to best matching .las file or None
+            Dictionary with LiDAR file metadata or None
         """
         if not self.lidar_files:
             return None
@@ -82,18 +193,28 @@ class LiDARExtractor:
         best_match = None
         best_overlap = 0
 
-        # Check each LiDAR file
-        for las_file in self.lidar_files:
+        # Check each LiDAR file record
+        for lidar_record in self.lidar_files:
             try:
-                # Read header only for efficiency
-                las_header = laspy.open(las_file).header
+                # Get bounds from database record (faster than reading file)
+                min_x = lidar_record.get("min_x")
+                max_x = lidar_record.get("max_x")
+                min_y = lidar_record.get("min_y")
+                max_y = lidar_record.get("max_y")
+
+                # Skip if bounds not available in database
+                if None in (min_x, max_x, min_y, max_y):
+                    print(
+                        f"⚠️  No bounds data for {lidar_record.get('filename')}, skipping"
+                    )
+                    continue
 
                 # Get LiDAR file bounds
                 lidar_bbox = {
-                    "min_x": las_header.x_min,
-                    "max_x": las_header.x_max,
-                    "min_y": las_header.y_min,
-                    "max_y": las_header.y_max,
+                    "min_x": float(min_x),
+                    "max_x": float(max_x),
+                    "min_y": float(min_y),
+                    "max_y": float(max_y),
                 }
 
                 # Calculate overlap (intersection over trail area)
@@ -116,27 +237,44 @@ class LiDARExtractor:
                 if trail_area > 0:
                     overlap_ratio = overlap_area / trail_area
 
+                    # Debug logging
+                    print(f"   📊 {lidar_record.get('filename')}:")
+                    print(
+                        f"      Trail bbox: X({trail_bbox['min_x']:.1f}-{trail_bbox['max_x']:.1f}), Y({trail_bbox['min_y']:.1f}-{trail_bbox['max_y']:.1f})"
+                    )
+                    print(
+                        f"      LiDAR bbox: X({lidar_bbox['min_x']:.1f}-{lidar_bbox['max_x']:.1f}), Y({lidar_bbox['min_y']:.1f}-{lidar_bbox['max_y']:.1f})"
+                    )
+                    print(
+                        f"      Overlap: {overlap_ratio:.1%} ({overlap_x:.1f}m x {overlap_y:.1f}m)"
+                    )
+
                     if overlap_ratio > best_overlap:
                         best_overlap = overlap_ratio
-                        best_match = las_file
+                        best_match = lidar_record
 
             except Exception as e:
-                print(f"Error checking {os.path.basename(las_file)}: {e}")
+                print(f"❌ Error checking {lidar_record.get('filename')}: {e}")
                 continue
 
-        if best_match and best_overlap > 0.5:  # At least 50% overlap
+        # Lower threshold to 2% for small LiDAR files or long trails
+        min_overlap_threshold = 0.02  # 2% minimum overlap
+
+        if best_match and best_overlap > min_overlap_threshold:
             print(
-                f"Found matching LiDAR file: {os.path.basename(best_match)} (overlap: {best_overlap:.1%})"
+                f"✅ Found matching LiDAR file: {best_match.get('filename')} (overlap: {best_overlap:.1%})"
             )
             return best_match
         else:
-            print(f"No suitable LiDAR file found (best overlap: {best_overlap:.1%})")
+            print(
+                f"⚠️  No suitable LiDAR file found (best overlap: {best_overlap:.1%}, threshold: {min_overlap_threshold:.1%})"
+            )
             return None
 
     def extract_elevation_profile(
         self,
         trail_coords: List[List[float]],
-        las_file_path: str = None,
+        lidar_record: Dict[str, Any] = None,
         search_radius: float = 2.0,
     ) -> Dict[str, Any]:
         """
@@ -144,16 +282,16 @@ class LiDARExtractor:
 
         Args:
             trail_coords: List of [lat, lon] coordinates
-            las_file_path: Path to specific .las file (or auto-detect)
+            lidar_record: Dictionary with LiDAR file metadata (or auto-detect)
             search_radius: Radius in meters to search for LiDAR points near each trail point
 
         Returns:
             Dictionary with elevation profile data
         """
         # Auto-detect LiDAR file if not provided
-        if las_file_path is None:
-            las_file_path = self.find_matching_lidar_file(trail_coords)
-            if las_file_path is None:
+        if lidar_record is None:
+            lidar_record = self.find_matching_lidar_file(trail_coords)
+            if lidar_record is None:
                 return {
                     "success": False,
                     "error": "No matching LiDAR file found",
@@ -161,18 +299,20 @@ class LiDARExtractor:
                     "coordinates": [],
                 }
 
-        # Check if file exists
-        if not os.path.exists(las_file_path):
+        # Get local file path (downloads from storage if needed)
+        las_file_path = self._get_local_file_path(lidar_record)
+
+        if not las_file_path or not os.path.exists(las_file_path):
             return {
                 "success": False,
-                "error": f"LiDAR file not found: {las_file_path}",
+                "error": f"LiDAR file not accessible: {lidar_record.get('filename')}",
                 "elevations": [],
                 "coordinates": [],
             }
 
         try:
             # Read LiDAR data
-            print(f"Reading LiDAR file: {os.path.basename(las_file_path)}")
+            print(f"📖 Reading LiDAR file: {os.path.basename(las_file_path)}")
             las_data = laspy.read(las_file_path)
 
             # Convert trail coordinates to MGA56

@@ -43,22 +43,6 @@ except Exception as e:
     print(f"DEM initialization error: {e}")
     dem_analyzer = None
 
-# Import LiDAR extraction
-try:
-    from lidar_extraction import LiDARExtractor
-
-    lidar_path = os.path.join(os.path.dirname(__file__), "data", "LiDAR")
-    lidar_extractor = LiDARExtractor(lidar_path)
-    print(
-        f"LiDAR Extractor initialized with {len(lidar_extractor.lidar_files)} LiDAR files"
-    )
-except ImportError as e:
-    print(f"LiDAR extraction not available: {e}")
-    lidar_extractor = None
-except Exception as e:
-    print(f"LiDAR initialization error: {e}")
-    lidar_extractor = None
-
 app = FastAPI()
 
 # Add CORS middleware
@@ -78,6 +62,22 @@ if not supabase_url or not supabase_key:
     raise Exception("Missing Supabase credentials. Please check your .env file.")
 
 supabase: Client = create_client(supabase_url, supabase_key)
+
+# Import LiDAR extraction (after supabase is initialized)
+try:
+    from lidar_extraction import LiDARExtractor
+
+    lidar_cache_path = "/tmp/lidar_cache"  # Use /tmp for cache
+    lidar_extractor = LiDARExtractor(lidar_cache_path, supabase_client=supabase)
+    print(
+        f"LiDAR Extractor initialized with {len(lidar_extractor.lidar_files)} LiDAR files"
+    )
+except ImportError as e:
+    print(f"LiDAR extraction not available: {e}")
+    lidar_extractor = None
+except Exception as e:
+    print(f"LiDAR initialization error: {e}")
+    lidar_extractor = None
 
 
 # Use the same haversine function from main.py
@@ -1944,7 +1944,12 @@ async def get_trail_elevation_sources(trail_id: int):
         # 2. LiDAR Source
         if lidar_extractor:
             try:
+                print(f"🔍 Searching for matching LiDAR file...")
+                print(f"   Available LiDAR files: {len(lidar_extractor.lidar_files)}")
                 lidar_result = lidar_extractor.extract_elevation_profile(coordinates)
+                print(
+                    f"   LiDAR extraction result: success={lidar_result.get('success')}, error={lidar_result.get('error')}"
+                )
 
                 if lidar_result.get("success"):
                     # Ensure same length as coordinates by interpolation if needed
@@ -2133,12 +2138,13 @@ async def get_trail_elevation_sources(trail_id: int):
 @app.post("/upload-lidar")
 async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
     """
-    Upload a LiDAR .las file and store metadata in the database
+    Upload a LiDAR .las file to Supabase Storage and store metadata in the database
 
     Args:
         file: LiDAR .las file
         trail_id: Optional trail ID to associate with this LiDAR file
     """
+    temp_path = None
     try:
         # Validate file extension
         if not file.filename.endswith(".las"):
@@ -2147,34 +2153,53 @@ async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
                 detail="Invalid file format. Only .las files are supported.",
             )
 
-        # Create LiDAR directory if it doesn't exist
-        lidar_dir = os.path.join(os.path.dirname(__file__), "data", "LiDAR")
-        os.makedirs(lidar_dir, exist_ok=True)
-
         # Generate unique filename to avoid conflicts
         timestamp = uuid.uuid4().hex[:8]
         safe_filename = f"{timestamp}_{file.filename}"
-        file_path = os.path.join(lidar_dir, safe_filename)
 
-        # Save file to disk
-        print(f"Saving LiDAR file to: {file_path}")
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-
+        # Read file content
+        print(f"📤 Reading LiDAR file: {file.filename}")
+        content = await file.read()
         file_size_mb = len(content) / (1024 * 1024)
+        print(f"📊 File size: {file_size_mb:.2f} MB")
+
+        # Upload to Supabase Storage
+        print(f"☁️  Uploading {safe_filename} to Supabase Storage...")
+        try:
+            storage_response = supabase.storage.from_("lidar-files").upload(
+                path=safe_filename,
+                file=content,
+                file_options={"content-type": "application/octet-stream"},
+            )
+            print(f"✅ Upload response: {storage_response}")
+        except Exception as storage_error:
+            print(f"❌ Storage upload error: {storage_error}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upload to storage: {str(storage_error)}",
+            )
+
+        # Get public URL
+        file_url = supabase.storage.from_("lidar-files").get_public_url(safe_filename)
+        print(f"🔗 File URL: {file_url}")
+
+        # Save temporarily to extract metadata
+        temp_path = os.path.join("/tmp", safe_filename)
+        print(f"💾 Saving temporary file for metadata extraction: {temp_path}")
+        with open(temp_path, "wb") as f:
+            f.write(content)
 
         # Extract metadata from LiDAR file
         try:
             import laspy
 
-            las_data = laspy.open(file_path)
+            las_data = laspy.open(temp_path)
             header = las_data.header
 
             metadata = {
                 "filename": safe_filename,
                 "original_filename": file.filename,
-                "file_path": file_path,
+                "file_url": file_url,
                 "file_size_mb": round(file_size_mb, 2),
                 "point_count": header.point_count,
                 "min_x": float(header.x_min),
@@ -2189,14 +2214,15 @@ async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
             }
 
             las_data.close()
+            print(f"📈 Metadata extracted: {header.point_count} points")
 
         except Exception as e:
-            print(f"Error extracting LiDAR metadata: {e}")
+            print(f"⚠️  Error extracting LiDAR metadata: {e}")
             # Use basic metadata if extraction fails
             metadata = {
                 "filename": safe_filename,
                 "original_filename": file.filename,
-                "file_path": file_path,
+                "file_url": file_url,
                 "file_size_mb": round(file_size_mb, 2),
                 "point_count": None,
                 "min_x": None,
@@ -2210,11 +2236,11 @@ async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
                 "crs_epsg": 28356,
             }
 
-        # Store metadata in Supabase
+        # Store metadata in Supabase database
         lidar_record = {
             "trail_id": trail_id,
             "filename": metadata["filename"],
-            "file_path": file_path,
+            "file_url": metadata["file_url"],  # Store URL instead of path
             "file_size_mb": metadata["file_size_mb"],
             "point_count": metadata.get("point_count"),
             "min_x": metadata.get("min_x"),
@@ -2228,39 +2254,48 @@ async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
             "crs_epsg": metadata.get("crs_epsg"),
         }
 
-        # Insert into Supabase (table must exist first)
         try:
             db_response = supabase.table("lidar_files").insert(lidar_record).execute()
-            print(f"LiDAR file metadata saved to database: {db_response.data}")
+            print(f"💾 LiDAR file metadata saved to database: {db_response.data}")
         except Exception as db_error:
-            print(
-                f"Warning: Could not save to database (table may not exist): {db_error}"
+            print(f"❌ Database error: {db_error}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to save metadata to database: {str(db_error)}",
             )
-            # Continue even if database insert fails
 
         # Reinitialize LiDAR extractor to pick up new file
         global lidar_extractor
         if lidar_extractor:
             lidar_extractor.lidar_files = lidar_extractor._find_lidar_files()
             print(
-                f"LiDAR extractor reinitialized with {len(lidar_extractor.lidar_files)} files"
+                f"🔄 LiDAR extractor reinitialized with {len(lidar_extractor.lidar_files)} files"
             )
 
         return {
             "success": True,
-            "message": "LiDAR file uploaded successfully",
-            "file": metadata,
-            "saved_to_database": True,
+            "message": "LiDAR file uploaded successfully to Supabase Storage",
+            "file_url": file_url,
+            "metadata": metadata,
+            "database_record": db_response.data[0] if db_response.data else None,
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"LiDAR upload error: {e}")
+        print(f"❌ LiDAR upload error: {e}")
         import traceback
 
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up temporary file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+                print(f"🗑️  Cleaned up temporary file: {temp_path}")
+            except Exception as cleanup_error:
+                print(f"⚠️  Could not clean up temp file: {cleanup_error}")
 
 
 @app.get("/lidar-files")
