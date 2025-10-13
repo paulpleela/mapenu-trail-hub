@@ -1,0 +1,541 @@
+import React from "react";
+import {
+  Info,
+  FileUp,
+  Map,
+  Smartphone,
+  Mountain,
+  Activity,
+  TrendingUp,
+  Gauge,
+  LineChart,
+  Box,
+  Database,
+  Download,
+  CheckCircle,
+  AlertCircle,
+  BookOpen,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+
+export default function InfoPage({ onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+      <div className="min-h-screen px-4 py-8">
+        <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <BookOpen className="w-8 h-8" />
+                  <h1 className="text-3xl font-bold">MAPENU Guide</h1>
+                </div>
+                <p className="text-blue-100 text-lg">
+                  Data Collection Methods & Platform Overview
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-6 space-y-8">
+            {/* Section 1: Platform Overview */}
+            <section>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Info className="w-6 h-6 text-blue-600" />
+                What is MAPENU?
+              </h2>
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6">
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  MAPENU is a specialized trail analysis platform designed for
+                  hikers and trail runners. Our primary focus is{" "}
+                  <strong className="text-blue-600">
+                    identifying and analyzing rolling hills
+                  </strong>{" "}
+                  in trail data, providing detailed terrain insights that go
+                  beyond basic elevation profiles.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <Activity className="w-6 h-6 text-purple-600 mb-2" />
+                    <h3 className="font-semibold text-gray-800 mb-1">
+                      Rolling Hills Detection
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Advanced algorithm measuring trail "bumpiness" - frequency
+                      (60%) and amplitude (40%) of elevation changes &gt;1m
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <Mountain className="w-6 h-6 text-green-600 mb-2" />
+                    <h3 className="font-semibold text-gray-800 mb-1">
+                      Terrain Analysis
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Comprehensive metrics including elevation gain/loss,
+                      slopes, terrain variety, and difficulty scoring
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 2: Data Collection Methods */}
+            <section>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <FileUp className="w-6 h-6 text-green-600" />
+                Data Collection Methods
+              </h2>
+
+              {/* Method 1: GPX Files */}
+              <Card className="mb-4 border-l-4 border-l-blue-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Map className="w-5 h-5 text-blue-600" />
+                    Method 1: GPX Files (Recommended for Trail Recording)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-800 mb-2">
+                      What is GPX?
+                    </h4>
+                    <p className="text-sm text-gray-700">
+                      GPX (GPS Exchange Format) is a standard XML format for GPS
+                      data. It records your trail's coordinates, elevation, and
+                      timestamps as you hike.
+                    </p>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                      <Smartphone className="w-5 h-5" />
+                      Recommended Apps:
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="font-medium text-gray-800">
+                          📱 GPS Tracks
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          iOS - Accurate GPS tracking with offline maps
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="font-medium text-gray-800">
+                          📱 My Tracks (OSM Tracker)
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Android - Open-source GPS logger
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <h4 className="font-semibold text-green-800 mb-2 flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5" />
+                      Best Practices:
+                    </h4>
+                    <ul className="space-y-1 text-sm text-gray-700">
+                      <li>✓ Enable high-accuracy GPS mode on your device</li>
+                      <li>✓ Record at 1-5 second intervals for detailed data</li>
+                      <li>✓ Keep phone in an easily accessible pocket/holder</li>
+                      <li>✓ Ensure phone has sufficient battery</li>
+                      <li>✓ Start recording before the trail begins</li>
+                      <li>✓ Stop recording after completing the trail</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Method 2: LiDAR Files */}
+              <Card className="mb-4 border-l-4 border-l-purple-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Box className="w-5 h-5 text-purple-600" />
+                    Method 2: LiDAR Files (.las format)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-purple-50 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-800 mb-2">
+                      What is LiDAR?
+                    </h4>
+                    <p className="text-sm text-gray-700">
+                      LiDAR (Light Detection and Ranging) creates detailed 3D
+                      point clouds of terrain using laser scanning. iPhone Pro
+                      and iPad Pro models have built-in LiDAR sensors.
+                    </p>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                      <Smartphone className="w-5 h-5" />
+                      Recommended LiDAR Scanner Apps:
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="font-medium text-gray-800">📱 dot3D</p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Professional-grade scanning
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="font-medium text-gray-800">📱 Polycam</p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Easy-to-use 3D scanner
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <p className="font-medium text-gray-800">
+                          📱 Scaniverse
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Free LiDAR scanning
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                    <h4 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5" />
+                      Requirements & Tips:
+                    </h4>
+                    <ul className="space-y-1 text-sm text-gray-700">
+                      <li>
+                        • Requires iPhone 12 Pro or later, iPad Pro (2020+)
+                      </li>
+                      <li>• Export scans in .las or .laz format</li>
+                      <li>• Scan in good lighting conditions</li>
+                      <li>• Move slowly and steadily while scanning</li>
+                      <li>• Overlap scan areas for better coverage</li>
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Method 3: QSpatial Data */}
+              <Card className="border-l-4 border-l-emerald-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Database className="w-5 h-5 text-emerald-600" />
+                    Method 3: QSpatial Open Data (Queensland, Australia)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-emerald-50 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-800 mb-2">
+                      What is QSpatial?
+                    </h4>
+                    <p className="text-sm text-gray-700">
+                      QSpatial provides free high-resolution (1-meter) LiDAR
+                      elevation data for Queensland regions. This is
+                      professional-grade DEM (Digital Elevation Model) data.
+                    </p>
+                  </div>
+
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                      <Download className="w-5 h-5" />
+                      How to Access:
+                    </h4>
+                    <ol className="space-y-2 text-sm text-gray-700 list-decimal list-inside">
+                      <li>
+                        Visit{" "}
+                        <a
+                          href="https://qldspatial.information.qld.gov.au/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          QSpatial Portal
+                        </a>
+                      </li>
+                      <li>Search for "LiDAR" or "Digital Elevation Model"</li>
+                      <li>Select your region of interest</li>
+                      <li>Download GeoTIFF (.tif) or LAS files</li>
+                      <li>Upload to MAPENU for analysis</li>
+                    </ol>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                    <p className="text-sm text-gray-700">
+                      <strong>Note:</strong> MAPENU currently uses QSpatial DEM
+                      data for Brisbane region analysis and 3D terrain
+                      visualizations.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </section>
+
+            {/* Section 3: What the Website Analyzes */}
+            <section>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <TrendingUp className="w-6 h-6 text-orange-600" />
+                What MAPENU Analyzes
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Visual 1: 2D Elevation Profile */}
+                <Card className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <LineChart className="w-5 h-5" />
+                      2D Elevation Profile Chart
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                      <img
+                        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23f3f4f6' width='400' height='200'/%3E%3Cpath d='M 20 180 L 50 160 L 80 140 L 110 145 L 140 120 L 170 100 L 200 110 L 230 80 L 260 90 L 290 70 L 320 75 L 350 60 L 380 65' stroke='%233b82f6' fill='none' stroke-width='3'/%3E%3Cpath d='M 20 180 L 50 160 L 80 140 L 110 145 L 140 120 L 170 100 L 200 110 L 230 80 L 260 90 L 290 70 L 320 75 L 350 60 L 380 65 L 380 180 Z' fill='%233b82f6' opacity='0.2'/%3E%3Ctext x='200' y='195' text-anchor='middle' font-size='12' fill='%236b7280'%3EDistance (km)%3C/text%3E%3Ctext x='10' y='100' font-size='12' fill='%236b7280' transform='rotate(-90 10 100)'%3EElevation (m)%3C/text%3E%3C/svg%3E"
+                        alt="Elevation Profile Example"
+                        className="w-full rounded"
+                      />
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      <strong>Shows:</strong>
+                    </p>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li>• Elevation changes over distance</li>
+                      <li>• Gradient/slope percentages</li>
+                      <li>• Cumulative elevation gain/loss</li>
+                      <li>• Visual identification of climbs and descents</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Visual 2: 3D Terrain */}
+                <Card className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Box className="w-5 h-5" />
+                      3D Terrain Visualization
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                      <img
+                        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Cdefs%3E%3ClinearGradient id='grad1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23f3f4f6;stop-opacity:1'/%3E%3Cstop offset='100%25' style='stop-color:%23d1d5db;stop-opacity:1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23grad1)' width='400' height='200'/%3E%3Cpath d='M 50 150 Q 100 120 150 130 T 250 100 T 350 120' stroke='%238b5cf6' fill='none' stroke-width='3' stroke-dasharray='5,5'/%3E%3Cellipse cx='150' cy='80' rx='80' ry='30' fill='%239ca3af' opacity='0.3'/%3E%3Cellipse cx='250' cy='100' rx='60' ry='25' fill='%239ca3af' opacity='0.4'/%3E%3Cpath d='M 100 140 L 120 130 L 140 135 L 160 125 L 180 130 L 200 120' stroke='%23ef4444' fill='none' stroke-width='2'/%3E%3Ctext x='200' y='190' text-anchor='middle' font-size='14' fill='%236b7280' font-weight='bold'%3E3D Interactive View%3C/text%3E%3C/svg%3E"
+                        alt="3D Terrain Example"
+                        className="w-full rounded"
+                      />
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      <strong>Shows:</strong>
+                    </p>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li>• Interactive 3D terrain surface</li>
+                      <li>• Trail path overlaid on real elevation</li>
+                      <li>• Surrounding topography</li>
+                      <li>• Rotatable and zoomable view</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Metric 1: Rolling Hills Index */}
+                <Card className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Activity className="w-5 h-5" />
+                      Rolling Hills Index (0-1)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="bg-emerald-50 rounded-lg p-4 mb-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700">
+                          Example: 0.65
+                        </span>
+                        <span className="text-xs text-emerald-600 font-semibold">
+                          MODERATE ROLLING
+                        </span>
+                      </div>
+                      <div className="bg-gray-200 rounded-full h-3">
+                        <div
+                          className="bg-gradient-to-r from-emerald-500 to-teal-500 h-3 rounded-full"
+                          style={{ width: "65%" }}
+                        ></div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      <strong>Measures:</strong>
+                    </p>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li>• Trail "bumpiness" or undulation</li>
+                      <li>• Frequency: # of hills per km (60% weight)</li>
+                      <li>• Amplitude: Average hill size (40% weight)</li>
+                      <li>• Threshold: Elevation changes &gt;1 meter</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Metric 2: Difficulty Score */}
+                <Card className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="bg-gradient-to-r from-orange-500 to-red-500 text-white">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Gauge className="w-5 h-5" />
+                      Difficulty Score & Time
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="bg-orange-50 rounded-lg p-4 mb-3">
+                      <div className="grid grid-cols-2 gap-3 text-center">
+                        <div>
+                          <p className="text-2xl font-bold text-orange-600">
+                            6.5
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            Difficulty Score
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-red-600">
+                            3.2h
+                          </p>
+                          <p className="text-xs text-gray-600">Est. Time</p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      <strong>Calculates:</strong>
+                    </p>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li>• Distance factor (30%)</li>
+                      <li>• Elevation gain factor (40%)</li>
+                      <li>• Rolling hills factor (30%)</li>
+                      <li>• Time via Naismith's Rule</li>
+                      <li>• Classification: Easy/Moderate/Hard/Extreme</li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+            </section>
+
+            {/* Section 4: Additional Features */}
+            <section>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                Additional Features
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-800 mb-2">
+                    📊 Trail Comparison
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Find similar trails based on distance, elevation, and
+                    rolling hills characteristics
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-800 mb-2">
+                    🌤️ Weather Analysis
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Weather exposure risk based on maximum elevation and terrain
+                    features
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-800 mb-2">
+                    🗺️ Interactive Maps
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    View trails on interactive maps with start/end markers and
+                    elevation overlays
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Quick Start Guide */}
+            <section className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                🚀 Quick Start Guide
+              </h2>
+              <ol className="space-y-3">
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    1
+                  </span>
+                  <div>
+                    <p className="font-semibold text-gray-800">
+                      Record Your Trail
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Use GPS Tracks or My Tracks app to record your hike as a
+                      GPX file
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    2
+                  </span>
+                  <div>
+                    <p className="font-semibold text-gray-800">
+                      Upload to MAPENU
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Click the "Import GPX" button and select your trail file
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    3
+                  </span>
+                  <div>
+                    <p className="font-semibold text-gray-800">
+                      View Analysis
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Explore rolling hills metrics, elevation profiles, 3D
+                      terrain, and difficulty ratings
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            </section>
+          </div>
+
+          {/* Footer */}
+          <div className="bg-gray-100 p-4 rounded-b-2xl text-center">
+            <p className="text-sm text-gray-600">
+              Questions or feedback?{" "}
+              <a
+                href="https://github.com/phurinjeffy/MAPENU"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline font-medium"
+              >
+                Visit our GitHub
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

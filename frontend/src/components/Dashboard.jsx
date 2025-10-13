@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Database,
 } from "lucide-react";
+import InfoPage from "./InfoPage";
 
 // API URL
 const API_BASE_URL = "http://localhost:8000";
@@ -293,6 +294,7 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showInfoPage, setShowInfoPage] = useState(false);
 
   // Load trails on component mount
   useEffect(() => {
@@ -655,6 +657,16 @@ export default function Dashboard() {
               >
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Analytics
+              </Button>
+
+              <Button
+                onClick={() => setShowInfoPage(true)}
+                variant="outline"
+                size="sm"
+                className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
+              >
+                <Info className="w-4 h-4 mr-2" />
+                Help & Guide
               </Button>
             </div>
           </div>
@@ -1523,6 +1535,9 @@ export default function Dashboard() {
           </Card>
         )}
       </div>
+
+      {/* Info/Help Page Modal */}
+      {showInfoPage && <InfoPage onClose={() => setShowInfoPage(false)} />}
     </div>
   );
 }
