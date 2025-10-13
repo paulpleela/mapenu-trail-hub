@@ -587,7 +587,7 @@ export default function Dashboard() {
   const handleLidarUpload = async (event) => {
     const file = event.target.files?.[0];
 
-    if (file && file.name.endsWith(".las")) {
+    if (file && (file.name.endsWith(".las") || file.name.endsWith(".laz"))) {
       setIsUploadingLidar(true);
       setLidarUploadSuccess(false);
 
@@ -635,7 +635,7 @@ export default function Dashboard() {
         event.target.value = "";
       }
     } else if (file) {
-      alert("Please select a valid .las file");
+      alert("Please select a valid .las or .laz file");
     }
   };
 
@@ -734,7 +734,7 @@ export default function Dashboard() {
               <div className="relative">
                 <input
                   type="file"
-                  accept=".las"
+                  accept=".las,.laz"
                   onChange={handleLidarUpload}
                   id="lidar-upload"
                   className="hidden"

@@ -2238,20 +2238,20 @@ async def get_trail_elevation_sources(trail_id: int):
 @app.post("/upload-lidar")
 async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
     """
-    Upload a LiDAR .las file to Supabase Storage and store metadata in the database
+    Upload a LiDAR .las/.laz file to Supabase Storage and store metadata in the database
     Checks for duplicates before uploading
 
     Args:
-        file: LiDAR .las file
+        file: LiDAR .las or .laz file (compressed or uncompressed)
         trail_id: Optional trail ID to associate with this LiDAR file
     """
     temp_path = None
     try:
         # Validate file extension
-        if not file.filename.endswith(".las"):
+        if not (file.filename.endswith(".las") or file.filename.endswith(".laz")):
             raise HTTPException(
                 status_code=400,
-                detail="Invalid file format. Only .las files are supported.",
+                detail="Invalid file format. Only .las and .laz files are supported.",
             )
 
         # Check for duplicates in database (by original filename)
