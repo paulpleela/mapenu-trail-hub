@@ -651,6 +651,15 @@ export default function Dashboard() {
               </Button>
 
               <Button
+                onClick={() => window.open("/measure", "_blank")}
+                variant="outline"
+                size="sm"
+              >
+                <Ruler className="w-4 h-4 mr-2" />
+                Measure GPX
+              </Button>
+
+              <Button
                 onClick={() => setShowAnalytics(!showAnalytics)}
                 variant={showAnalytics ? "default" : "outline"}
                 size="sm"
