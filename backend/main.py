@@ -63,6 +63,22 @@ if not supabase_url or not supabase_key:
 
 supabase: Client = create_client(supabase_url, supabase_key)
 
+# Import LiDAR extraction (after supabase is initialized)
+try:
+    from lidar_extraction import LiDARExtractor
+
+    lidar_cache_path = "/tmp/lidar_cache"  # Use /tmp for cache
+    lidar_extractor = LiDARExtractor(lidar_cache_path, supabase_client=supabase)
+    print(
+        f"LiDAR Extractor initialized with {len(lidar_extractor.lidar_files)} LiDAR files"
+    )
+except ImportError as e:
+    print(f"LiDAR extraction not available: {e}")
+    lidar_extractor = None
+except Exception as e:
+    print(f"LiDAR initialization error: {e}")
+    lidar_extractor = None
+
 
 # Use the same haversine function from main.py
 def haversine(lat1, lon1, lat2, lon2):
@@ -85,39 +101,111 @@ measure ‘bumpiness’, meaningful ups/downs over 1 meter
 """
 
 
-def analyze_rolling_hills(elevations, distances):
-    """Advanced rolling hills analysis: counts and scores significant ascents/descents"""
-    if len(elevations) < 3:
-        return 0.0
+def count_rolling_hills(elevations):
+    """
+    Count the number of distinct "hills" (peaks and valleys) in the elevation profile.
 
-    threshold = 1  # meters, what counts as a 'hill'
+    Algorithm:
+    1. Identify all local peaks (higher than neighbors)
+    2. Identify all local valleys (lower than neighbors)
+    3. Total hills = peaks + valleys (each represents a direction change)
+
+    A "significant" peak/valley must have at least 3m elevation difference from neighbors
+    to filter out GPS noise.
+
+    Args:
+        elevations: List of elevation values in meters
+
+    Returns:
+        int: Number of distinct hills (peaks + valleys)
+    """
+    if len(elevations) < 3:
+        return 0
+
+    # Minimum elevation change to be considered significant
+    # 1m threshold catches most noticeable hills while filtering extreme GPS noise
+    min_prominence = 1.0  # meters
+
+    peaks = 0
+    valleys = 0
+
+    for i in range(1, len(elevations) - 1):
+        prev_elev = elevations[i - 1]
+        curr_elev = elevations[i]
+        next_elev = elevations[i + 1]
+
+        # Check if this is a local peak (higher than both neighbors)
+        if curr_elev > prev_elev and curr_elev > next_elev:
+            # Check if it's significant enough
+            if (curr_elev - prev_elev >= min_prominence) or (
+                curr_elev - next_elev >= min_prominence
+            ):
+                peaks += 1
+
+        # Check if this is a local valley (lower than both neighbors)
+        elif curr_elev < prev_elev and curr_elev < next_elev:
+            # Check if it's significant enough
+            if (prev_elev - curr_elev >= min_prominence) or (
+                next_elev - curr_elev >= min_prominence
+            ):
+                valleys += 1
+
+    # Total number of hills = peaks + valleys
+    # Each represents a change in terrain direction
+    total_hills = peaks + valleys
+
+    return total_hills
+
+
+def analyze_rolling_hills(elevations, distances):
+    """Advanced rolling hills analysis: counts and scores significant ascents/descents
+
+    Returns:
+        tuple: (rolling_index: float, hills_count: int)
+    """
+    if len(elevations) < 3:
+        return 0.0, 0
+
+    # Count actual hills (peaks and valleys)
+    hills_count = count_rolling_hills(elevations)
+
+    # For the rolling index calculation, count significant elevation changes
+    threshold = 1  # meters, what counts as a significant change
     significant_changes = []
     for i in range(1, len(elevations)):
         change = elevations[i] - elevations[i - 1]
         if abs(change) >= threshold:
             significant_changes.append(abs(change))
 
-    # Frequency: how many significant hills per km
+    # Frequency: how many significant changes per km
     total_distance = distances[-1] if distances else 1
-    hills_per_km = (
+    changes_per_km = (
         len(significant_changes) / total_distance if total_distance > 0 else 0
     )
 
-    # Amplitude: average size of significant hills
-    avg_hill_size = (
+    # Amplitude: average size of significant changes
+    avg_change_size = (
         sum(significant_changes) / len(significant_changes)
         if significant_changes
         else 0
     )
 
     # Composite index: weighted sum (tweak weights as needed)
-    rolling_index = 0.6 * hills_per_km + 0.4 * (
-        avg_hill_size / 20
+    rolling_index = 0.6 * changes_per_km + 0.4 * (
+        avg_change_size / 20
     )  # typical big hills are ~20 m per hill
 
-    # Normalize to 0-1 scale
-    normalized_index = min(rolling_index, 1.0)
-    return normalized_index
+    # Debug output
+    print(f"🔍 Rolling Hills Debug:")
+    print(f"   - Actual hills (peaks + valleys): {hills_count}")
+    print(f"   - Significant elevation changes: {len(significant_changes)}")
+    print(f"   - Total distance: {total_distance:.2f} km")
+    print(f"   - Changes per km: {changes_per_km:.2f}")
+    print(f"   - Avg change size: {avg_change_size:.2f} m")
+    print(f"   - Rolling index (UNCAPPED): {rolling_index:.4f}")
+
+    # Return both the rolling index and the count
+    return rolling_index, hills_count
 
 
 """
@@ -1374,8 +1462,16 @@ async def upload_gpx(file: UploadFile = File(...)):
         max_elevation = max(elevations) if elevations else 0
         min_elevation = min(elevations) if elevations else 0
 
-        # Rolling hills index (advanced)
-        rolling_hills_index = round(analyze_rolling_hills(elevations, distances), 2)
+        # Rolling hills analysis (advanced) - returns index and count
+        rolling_hills_index, rolling_hills_count = analyze_rolling_hills(
+            elevations, distances
+        )
+        rolling_hills_index = round(rolling_hills_index, 2)
+        print(f"🔍 DEBUG: Rolling Hills Index calculated: {rolling_hills_index}")
+        print(f"🔍 DEBUG: Rolling Hills Count: {rolling_hills_count}")
+        print(
+            f"🔍 DEBUG: Elevations count: {len(elevations)}, Distance: {distances[-1] if distances else 0} km"
+        )
 
         # Create elevation profile data
         elevation_profile_data = [
@@ -1431,10 +1527,16 @@ async def upload_gpx(file: UploadFile = File(...)):
                 seg_start_idx = seg_end_idx
 
         # Simple difficulty calculation
-        distance_factor = min(total_distance / 10, 1) * 3
-        elevation_factor = min(elevation_gain / 1000, 1) * 4
-        rolling_factor = rolling_hills_index * 3
-        difficulty_score = distance_factor + elevation_factor + rolling_factor
+        distance_factor = min(total_distance / 10, 1) * 3  # 0-3 points
+        elevation_factor = min(elevation_gain / 1000, 1) * 4  # 0-4 points
+        # Normalize rolling hills index (typically 0-50 range) to 0-1, then scale to 0-3 points
+        normalized_rolling = min(
+            rolling_hills_index / 50, 1
+        )  # Cap at 50 for normalization
+        rolling_factor = normalized_rolling * 3  # 0-3 points
+        difficulty_score = (
+            distance_factor + elevation_factor + rolling_factor
+        )  # Max = 10 points
 
         if difficulty_score <= 3:
             difficulty_level = "Easy"
@@ -1502,6 +1604,7 @@ async def upload_gpx(file: UploadFile = File(...)):
             "max_elevation": int(round(max_elevation, 0)),
             "min_elevation": int(round(min_elevation, 0)),
             "rolling_hills_index": rolling_hills_index,
+            "rolling_hills_count": rolling_hills_count,  # Number of significant elevation changes
             "difficulty_score": round(difficulty_score, 1),
             "difficulty_level": difficulty_level,
             "coordinates": coords,
@@ -1521,9 +1624,22 @@ async def upload_gpx(file: UploadFile = File(...)):
             "elevation_change_total": int(round(elevation_gain + elevation_loss, 0)),
             # Store weather data in existing numeric fields, we'll interpret on frontend
             "weather_difficulty_multiplier": weather_score,  # Use existing column with new meaning
-            "technical_rating": min(
-                10, int(max_slope / 10 + rolling_hills_index * 5 + 1)
-            ),  # 1-10 technical difficulty
+            # More sensitive technical difficulty calculation (1-10 scale)
+            # Factors: max slope (40%), rolling hills (30%), avg slope (30%)
+            # This spreads trails across the scale better
+            "technical_rating": max(
+                1,
+                min(
+                    10,
+                    round(
+                        1
+                        + (max_slope / 40)
+                        * 3.5  # Max slope contribution (0-3.5 points)
+                        + (rolling_hills_index * 2.5)  # Rolling hills (0-2.5+ points)
+                        + (avg_slope / 8) * 3  # Average slope matters too (0-3 points)
+                    ),
+                ),
+            ),
         }
 
         # Insert trail into Supabase database
@@ -1837,6 +1953,568 @@ async def get_dem_coverage():
 
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+@app.get("/trail/{trail_id}/elevation-sources")
+async def get_trail_elevation_sources(trail_id: int):
+    """
+    Get elevation profiles from all available data sources:
+    - GPX: Raw elevation data from the uploaded GPX file
+    - LiDAR: High-resolution point cloud data (.las files)
+    - QSpatial: Digital Elevation Model (DEM) data
+    - Overall: Averaged elevation from all available sources
+    """
+    try:
+        print(f"\n🔍 Getting elevation sources for trail {trail_id}")
+
+        # Get trail data from database
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
+        if not trail_response.data:
+            raise HTTPException(status_code=404, detail="Trail not found")
+
+        trail = trail_response.data[0]
+        print(f"📍 Trail name: {trail.get('name')}")
+
+        coordinates = trail.get("coordinates", [])
+        print(f"📊 Coordinates count: {len(coordinates)}")
+
+        if not coordinates:
+            return {
+                "success": False,
+                "error": "No coordinates available for this trail",
+            }
+
+        # Calculate distances along trail for x-axis
+        distances = [0]
+        print(f"🧮 Calculating distances for {len(coordinates)} coordinates")
+        print(
+            f"📍 First coordinate sample: {coordinates[0] if coordinates else 'None'}"
+        )
+
+        for i in range(1, len(coordinates)):
+            try:
+                lat1, lon1 = coordinates[i - 1]
+                lat2, lon2 = coordinates[i]
+                dist = haversine(lat1, lon1, lat2, lon2)
+                distances.append(distances[-1] + dist)
+            except Exception as e:
+                print(f"❌ Error at coordinate index {i}: {e}")
+                print(f"   Coordinate[{i-1}]: {coordinates[i-1]}")
+                print(f"   Coordinate[{i}]: {coordinates[i]}")
+                raise
+
+        # Convert distances to kilometers
+        distances_km = [d / 1000 for d in distances]
+        print(f"✅ Calculated {len(distances_km)} distance points")
+
+        # Initialize results
+        sources = {}
+
+        # 1. GPX Source - use elevations from trail data if available
+        # Check both "elevations" and "elevation_profile" columns
+        elevation_profile = trail.get("elevation_profile", [])
+
+        # Extract elevations from elevation_profile if it's an array of objects
+        if (
+            elevation_profile
+            and isinstance(elevation_profile, list)
+            and len(elevation_profile) > 0
+        ):
+            if isinstance(elevation_profile[0], dict):
+                # elevation_profile is array of {elevation, distance, slope} objects
+                gpx_elevations = [point.get("elevation") for point in elevation_profile]
+            else:
+                # elevation_profile is already an array of numbers
+                gpx_elevations = elevation_profile
+        else:
+            # Fallback to "elevations" column (older format)
+            gpx_elevations = trail.get("elevations", [])
+
+        print(
+            f"📈 GPX elevations count: {len(gpx_elevations) if gpx_elevations else 0}"
+        )
+
+        if gpx_elevations and len(gpx_elevations) == len(coordinates):
+            print("✅ GPX source available")
+            sources["GPX"] = {
+                "available": True,
+                "elevations": gpx_elevations,
+                "distances": distances_km,
+                "coordinates": coordinates,
+                "source": "Original GPX file",
+                "data_points": len(gpx_elevations),
+            }
+        else:
+            print(
+                f"❌ GPX source not available - elevations: {len(gpx_elevations) if gpx_elevations else 0}, coordinates: {len(coordinates)}"
+            )
+            sources["GPX"] = {
+                "available": False,
+                "error": "No elevation data in GPX file",
+                "elevations": [],
+                "distances": [],
+                "coordinates": [],
+            }
+
+        # 2. LiDAR Source
+        if lidar_extractor:
+            try:
+                print(f"🔍 Searching for matching LiDAR file...")
+                print(f"   Available LiDAR files: {len(lidar_extractor.lidar_files)}")
+                lidar_result = lidar_extractor.extract_elevation_profile(coordinates)
+                print(
+                    f"   LiDAR extraction result: success={lidar_result.get('success')}, error={lidar_result.get('error')}"
+                )
+
+                if lidar_result.get("success"):
+                    # Ensure same length as coordinates by interpolation if needed
+                    lidar_elevations = lidar_result.get("elevations", [])
+
+                    sources["LiDAR"] = {
+                        "available": True,
+                        "elevations": lidar_elevations,
+                        "distances": distances_km[: len(lidar_elevations)],
+                        "coordinates": lidar_result.get(
+                            "coordinates", coordinates[: len(lidar_elevations)]
+                        ),
+                        "source": f"LiDAR point cloud: {lidar_result.get('lidar_file', 'N/A')}",
+                        "data_points": len(lidar_elevations),
+                        "coverage_percent": lidar_result.get("coverage_percent", 0),
+                        "total_lidar_points": lidar_result.get("total_lidar_points", 0),
+                    }
+                else:
+                    sources["LiDAR"] = {
+                        "available": False,
+                        "error": lidar_result.get("error", "LiDAR extraction failed"),
+                        "elevations": [],
+                        "distances": [],
+                        "coordinates": [],
+                    }
+            except Exception as e:
+                print(f"LiDAR extraction error: {e}")
+                sources["LiDAR"] = {
+                    "available": False,
+                    "error": str(e),
+                    "elevations": [],
+                    "distances": [],
+                    "coordinates": [],
+                }
+        else:
+            sources["LiDAR"] = {
+                "available": False,
+                "error": "LiDAR extractor not initialized",
+                "elevations": [],
+                "distances": [],
+                "coordinates": [],
+            }
+
+        # 3. QSpatial DEM Source
+        if dem_analyzer:
+            try:
+                dem_result = dem_analyzer.extract_elevation_profile(coordinates)
+
+                if dem_result.get("success"):
+                    dem_profile = dem_result.get("elevation_profile", {})
+                    dem_elevations = dem_profile.get("elevations", [])
+
+                    sources["QSpatial"] = {
+                        "available": True,
+                        "elevations": dem_elevations,
+                        "distances": distances_km[: len(dem_elevations)],
+                        "coordinates": dem_profile.get(
+                            "coordinates", coordinates[: len(dem_elevations)]
+                        ),
+                        "source": "QSpatial 1m DEM tiles",
+                        "data_points": len(dem_elevations),
+                        "resolution": "1 meter",
+                        "tiles_used": dem_result.get("tiles_used", 0),
+                    }
+                else:
+                    sources["QSpatial"] = {
+                        "available": False,
+                        "error": dem_result.get("error", "DEM extraction failed"),
+                        "elevations": [],
+                        "distances": [],
+                        "coordinates": [],
+                    }
+            except Exception as e:
+                print(f"DEM extraction error: {e}")
+                sources["QSpatial"] = {
+                    "available": False,
+                    "error": str(e),
+                    "elevations": [],
+                    "distances": [],
+                    "coordinates": [],
+                }
+        else:
+            sources["QSpatial"] = {
+                "available": False,
+                "error": "DEM analyzer not initialized",
+                "elevations": [],
+                "distances": [],
+                "coordinates": [],
+            }
+
+        # 4. Overall - Average of all available sources
+        available_sources = [s for s in sources.values() if s.get("available")]
+
+        if available_sources:
+            # Find the minimum length to align all sources
+            min_length = min(len(s["elevations"]) for s in available_sources)
+
+            # Calculate averaged elevations
+            overall_elevations = []
+            for i in range(min_length):
+                elevations_at_point = [s["elevations"][i] for s in available_sources]
+                avg_elevation = sum(elevations_at_point) / len(elevations_at_point)
+                overall_elevations.append(avg_elevation)
+
+            sources["Overall"] = {
+                "available": True,
+                "elevations": overall_elevations,
+                "distances": distances_km[:min_length],
+                "coordinates": coordinates[:min_length],
+                "source": f"Average of {len(available_sources)} sources: {', '.join([k for k, v in sources.items() if v.get('available') and k != 'Overall'])}",
+                "data_points": min_length,
+                "sources_used": len(available_sources),
+                "source_names": [
+                    k
+                    for k, v in sources.items()
+                    if v.get("available") and k != "Overall"
+                ],
+            }
+        else:
+            sources["Overall"] = {
+                "available": False,
+                "error": "No elevation sources available",
+                "elevations": [],
+                "distances": [],
+                "coordinates": [],
+            }
+
+        # Calculate slope data for each source (for the dashed slope line)
+        for source_name, source_data in sources.items():
+            if source_data.get("available") and len(source_data["elevations"]) > 1:
+                elevations = source_data["elevations"]
+                distances_m = [d * 1000 for d in source_data["distances"]]
+
+                # Ensure distances and elevations have the same length
+                if len(distances_m) != len(elevations):
+                    print(
+                        f"⚠️ Length mismatch for {source_name}: distances={len(distances_m)}, elevations={len(elevations)}"
+                    )
+                    min_length = min(len(distances_m), len(elevations))
+                    distances_m = distances_m[:min_length]
+                    elevations = elevations[:min_length]
+                    source_data["elevations"] = elevations
+                    source_data["distances"] = [d / 1000 for d in distances_m]
+
+                slopes = []
+                for i in range(1, len(elevations)):
+                    elev_change = elevations[i] - elevations[i - 1]
+                    dist_change = distances_m[i] - distances_m[i - 1]
+
+                    if dist_change > 0:
+                        slope_percent = (elev_change / dist_change) * 100
+                        slopes.append(slope_percent)
+                    else:
+                        slopes.append(0)
+
+                # Prepend 0 for first point
+                slopes.insert(0, 0)
+                source_data["slopes"] = slopes
+
+        return {
+            "success": True,
+            "trail_id": trail_id,
+            "trail_name": trail.get("name", "Unknown"),
+            "sources": sources,
+            "summary": {
+                "total_sources_available": len(
+                    [s for s in sources.values() if s.get("available")]
+                ),
+                "gpx_available": sources["GPX"]["available"],
+                "lidar_available": sources["LiDAR"]["available"],
+                "qspatial_available": sources["QSpatial"]["available"],
+                "overall_available": sources["Overall"]["available"],
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Elevation sources error: {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/upload-lidar")
+async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
+    """
+    Upload a LiDAR .las file to Supabase Storage and store metadata in the database
+    Checks for duplicates before uploading
+
+    Args:
+        file: LiDAR .las file
+        trail_id: Optional trail ID to associate with this LiDAR file
+    """
+    temp_path = None
+    try:
+        # Validate file extension
+        if not file.filename.endswith(".las"):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file format. Only .las files are supported.",
+            )
+
+        # Check for duplicates in database (by original filename)
+        print(f"🔍 Checking for existing file: {file.filename}")
+        existing_check = (
+            supabase.table("lidar_files")
+            .select("id, filename, file_url")
+            .ilike("filename", f"%{file.filename}")
+            .execute()
+        )
+
+        if existing_check.data:
+            existing_file = existing_check.data[0]
+            print(f"⚠️  File already exists: {existing_file['filename']}")
+            raise HTTPException(
+                status_code=409,
+                detail=f"File '{file.filename}' already exists in database. "
+                f"Existing file: {existing_file['filename']}. "
+                f"Please rename your file or delete the existing one first.",
+            )
+
+        # Generate unique filename to avoid conflicts in storage
+        timestamp = uuid.uuid4().hex[:8]
+        safe_filename = f"{timestamp}_{file.filename}"
+
+        # Read file content
+        print(f"📤 Reading LiDAR file: {file.filename}")
+        content = await file.read()
+        file_size_mb = len(content) / (1024 * 1024)
+        print(f"📊 File size: {file_size_mb:.2f} MB")
+
+        # Upload to Supabase Storage
+        print(f"☁️  Uploading {safe_filename} to Supabase Storage...")
+        try:
+            storage_response = supabase.storage.from_("lidar-files").upload(
+                path=safe_filename,
+                file=content,
+                file_options={"content-type": "application/octet-stream"},
+            )
+            print(f"✅ Upload response: {storage_response}")
+        except Exception as storage_error:
+            print(f"❌ Storage upload error: {storage_error}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upload to storage: {str(storage_error)}",
+            )
+
+        # Get public URL
+        file_url = supabase.storage.from_("lidar-files").get_public_url(safe_filename)
+        print(f"🔗 File URL: {file_url}")
+
+        # Save temporarily to extract metadata
+        temp_path = os.path.join("/tmp", safe_filename)
+        print(f"💾 Saving temporary file for metadata extraction: {temp_path}")
+        with open(temp_path, "wb") as f:
+            f.write(content)
+
+        # Extract metadata from LiDAR file
+        try:
+            import laspy
+
+            las_data = laspy.open(temp_path)
+            header = las_data.header
+
+            metadata = {
+                "filename": safe_filename,
+                "original_filename": file.filename,
+                "file_url": file_url,
+                "file_size_mb": round(file_size_mb, 2),
+                "point_count": header.point_count,
+                "min_x": float(header.x_min),
+                "max_x": float(header.x_max),
+                "min_y": float(header.y_min),
+                "max_y": float(header.y_max),
+                "min_z": float(header.z_min),
+                "max_z": float(header.z_max),
+                "las_version": f"{header.version.major}.{header.version.minor}",
+                "point_format_id": header.point_format.id,
+                "crs_epsg": 28356,  # Assuming GDA94 MGA Zone 56
+            }
+
+            las_data.close()
+            print(f"📈 Metadata extracted: {header.point_count} points")
+
+        except Exception as e:
+            print(f"⚠️  Error extracting LiDAR metadata: {e}")
+            # Use basic metadata if extraction fails
+            metadata = {
+                "filename": safe_filename,
+                "original_filename": file.filename,
+                "file_url": file_url,
+                "file_size_mb": round(file_size_mb, 2),
+                "point_count": None,
+                "min_x": None,
+                "max_x": None,
+                "min_y": None,
+                "max_y": None,
+                "min_z": None,
+                "max_z": None,
+                "las_version": None,
+                "point_format_id": None,
+                "crs_epsg": 28356,
+            }
+
+        # Store metadata in Supabase database
+        lidar_record = {
+            "trail_id": trail_id,
+            "filename": metadata["filename"],
+            "file_url": metadata["file_url"],  # Store URL instead of path
+            "file_size_mb": metadata["file_size_mb"],
+            "point_count": metadata.get("point_count"),
+            "min_x": metadata.get("min_x"),
+            "max_x": metadata.get("max_x"),
+            "min_y": metadata.get("min_y"),
+            "max_y": metadata.get("max_y"),
+            "min_z": metadata.get("min_z"),
+            "max_z": metadata.get("max_z"),
+            "las_version": metadata.get("las_version"),
+            "point_format_id": metadata.get("point_format_id"),
+            "crs_epsg": metadata.get("crs_epsg"),
+        }
+
+        try:
+            db_response = supabase.table("lidar_files").insert(lidar_record).execute()
+            print(f"💾 LiDAR file metadata saved to database: {db_response.data}")
+        except Exception as db_error:
+            print(f"❌ Database error: {db_error}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to save metadata to database: {str(db_error)}",
+            )
+
+        # Reinitialize LiDAR extractor to pick up new file
+        global lidar_extractor
+        if lidar_extractor:
+            lidar_extractor.lidar_files = lidar_extractor._find_lidar_files()
+            print(
+                f"🔄 LiDAR extractor reinitialized with {len(lidar_extractor.lidar_files)} files"
+            )
+
+        return {
+            "success": True,
+            "message": "LiDAR file uploaded successfully to Supabase Storage",
+            "file_url": file_url,
+            "metadata": metadata,
+            "database_record": db_response.data[0] if db_response.data else None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ LiDAR upload error: {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up temporary file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+                print(f"🗑️  Cleaned up temporary file: {temp_path}")
+            except Exception as cleanup_error:
+                print(f"⚠️  Could not clean up temp file: {cleanup_error}")
+
+
+@app.get("/lidar-files")
+async def get_lidar_files():
+    """Get list of all LiDAR files from database"""
+    try:
+        response = supabase.table("lidar_files").select("*").execute()
+        return {
+            "success": True,
+            "lidar_files": response.data,
+            "count": len(response.data),
+        }
+    except Exception as e:
+        print(f"Error fetching LiDAR files: {e}")
+        return {"success": False, "error": str(e), "lidar_files": [], "count": 0}
+
+
+@app.delete("/lidar-files/{lidar_id}")
+async def delete_lidar_file(lidar_id: int):
+    """
+    Delete a LiDAR file from both Supabase Storage and database
+
+    Args:
+        lidar_id: ID of the LiDAR file record to delete
+    """
+    try:
+        # Get file info from database
+        print(f"🔍 Looking up LiDAR file with ID: {lidar_id}")
+        file_response = (
+            supabase.table("lidar_files").select("*").eq("id", lidar_id).execute()
+        )
+
+        if not file_response.data:
+            raise HTTPException(
+                status_code=404, detail=f"LiDAR file with ID {lidar_id} not found"
+            )
+
+        file_record = file_response.data[0]
+        filename = file_record.get("filename")
+        file_url = file_record.get("file_url")
+
+        print(f"📂 Found file: {filename}")
+
+        # Delete from Supabase Storage
+        if file_url and filename:
+            try:
+                print(f"🗑️  Deleting from storage: {filename}")
+                storage_delete = supabase.storage.from_("lidar-files").remove(
+                    [filename]
+                )
+                print(f"✅ Deleted from storage: {storage_delete}")
+            except Exception as storage_error:
+                print(f"⚠️  Could not delete from storage: {storage_error}")
+                # Continue with database deletion even if storage deletion fails
+
+        # Delete from database
+        print(f"🗑️  Deleting from database: ID {lidar_id}")
+        db_delete = supabase.table("lidar_files").delete().eq("id", lidar_id).execute()
+        print(f"✅ Deleted from database")
+
+        # Reinitialize LiDAR extractor
+        global lidar_extractor
+        if lidar_extractor:
+            lidar_extractor.lidar_files = lidar_extractor._find_lidar_files()
+            print(
+                f"🔄 LiDAR extractor reinitialized with {len(lidar_extractor.lidar_files)} files"
+            )
+
+        return {
+            "success": True,
+            "message": f"LiDAR file '{filename}' deleted successfully",
+            "deleted_file": file_record,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting LiDAR file: {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
