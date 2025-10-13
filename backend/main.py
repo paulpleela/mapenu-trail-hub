@@ -1689,7 +1689,7 @@ async def get_trail_dem_analysis(trail_id: int):
             "visualization_3d": visualization_3d,
             "data_quality": {
                 "resolution": "1 meter",
-                "data_source": "Queensland Government DEM",
+                "data_source": "QSpatial DEM",
                 "coordinate_system": "GDA94 MGA Zone 56",
                 "accuracy": "±0.5 meters",
             },
