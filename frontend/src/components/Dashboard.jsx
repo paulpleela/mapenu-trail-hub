@@ -1688,65 +1688,56 @@ export default function Dashboard() {
                           </div>
                         )}
 
-                        {/* 3D Terrain Visualization */}
-                        <div className="bg-white rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <h5 className="font-semibold text-gray-800">
-                              3D Terrain Visualization
-                            </h5>
-                            {loading3D && (
-                              <div className="flex items-center text-blue-600 text-xs">
-                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
-                                Generating...
+                          {/* 3D Terrain Visualization */}
+                          <div className="bg-white rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="font-semibold text-gray-800">3D Terrain Visualization</h5>
+                              {loading3D && (
+                                <div className="flex items-center text-blue-600 text-xs">
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                                  Generating...
+                                </div>
+                              )}
+                            </div>
+                            
+                            {terrain3D?.visualization_type === 'interactive' && terrain3D?.visualization_html ? (
+                              <div className="text-center">
+                                <div className="w-full h-screen rounded-lg border shadow-lg overflow-hidden">
+                                  <iframe
+                                    src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
+                                    className="w-full h-full border-0"
+                                    title="Interactive 3D Terrain Visualization"
+                                    sandbox="allow-scripts allow-same-origin"
+                                    loading="lazy"
+                                  />
+                                </div>
+                                <p className="text-xs text-gray-600 mt-2">
+                                  🎮 Interactive 3D terrain - Click and drag to rotate, scroll to zoom
+                                </p>
                               </div>
-                            )}
-                          </div>
-
-                          {terrain3D?.visualization_type === "interactive" &&
-                          terrain3D?.visualization_html ? (
-                            <div className="text-center">
-                              <div className="w-full h-150 rounded-lg border shadow-lg overflow-hidden">
-                                <iframe
-                                  src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
-                                  className="w-full h-full border-0"
-                                  title="Interactive 3D Terrain Visualization"
-                                  sandbox="allow-scripts allow-same-origin"
-                                  loading="lazy"
+                            ) : terrain3D?.visualization ? (
+                              <div className="text-center">
+                                <img 
+                                  src={terrain3D.visualization} 
+                                  alt="3D Terrain Visualization"
+                                  className="max-w-full h-auto rounded-lg border"
                                 />
+                                <p className="text-xs text-gray-600 mt-2">
+                                  3D terrain model showing trail path over DEM data
+                                </p>
                               </div>
-                              <p className="text-xs text-gray-600 mt-2">
-                                🎮 Interactive 3D terrain - Click and drag to
-                                rotate, scroll to zoom
-                              </p>
-                            </div>
-                          ) : terrain3D?.visualization ? (
-                            <div className="text-center">
-                              <img
-                                src={terrain3D.visualization}
-                                alt="3D Terrain Visualization"
-                                className="max-w-full h-auto rounded-lg border"
-                              />
-                              <p className="text-xs text-gray-600 mt-2">
-                                3D terrain model showing trail path over DEM
-                                data
-                              </p>
-                            </div>
-                          ) : terrain3D?.error ? (
-                            <div className="text-center py-4">
-                              <p className="text-red-600 text-sm">
-                                {terrain3D.error}
-                              </p>
-                            </div>
-                          ) : !terrain3D ? (
-                            <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                              <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                              <p>3D terrain visualization will appear here</p>
-                              <p className="text-xs mt-1">
-                                Shows trail path over real DEM elevation data
-                              </p>
-                            </div>
-                          ) : null}
-                        </div>
+                            ) : terrain3D?.error ? (
+                              <div className="text-center py-4">
+                                <p className="text-red-600 text-sm">{terrain3D.error}</p>
+                              </div>
+                            ) : !terrain3D ? (
+                              <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                                <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                                <p>3D terrain visualization will appear here</p>
+                                <p className="text-xs mt-1">Shows trail path over real DEM elevation data</p>
+                              </div>
+                            ) : null}
+                          </div>
 
                         {/* Data Quality Info */}
                         <div className="bg-gradient-to-r from-blue-100 to-green-100 rounded-lg p-3">
