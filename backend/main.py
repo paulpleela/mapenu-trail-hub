@@ -30,7 +30,10 @@ load_dotenv()
 # Import real DEM analysis
 try:
     from real_dem_analysis import RealDEMAnalyzer
-    dem_path = os.path.join(os.path.dirname(__file__), "data", "QLD Government", "DEM", "1 Metre")
+
+    dem_path = os.path.join(
+        os.path.dirname(__file__), "data", "QLD Government", "DEM", "1 Metre"
+    )
     dem_analyzer = RealDEMAnalyzer(dem_path)
     print(f"DEM Analyzer initialized with {len(dem_analyzer.dem_files)} DEM files")
 except ImportError as e:
@@ -314,7 +317,8 @@ def get_terrain_variety_description(score):
         return "Limited terrain variety, mostly consistent elevation"
     else:
         return "Flat or very consistent terrain"
-    
+
+
 """
 Easy (0.7-0.8x): Paved roads, boardwalks, concrete
 Normal (1.0x): Dirt trails, gravel, grass (baseline)
@@ -322,6 +326,8 @@ Moderate (1.1-1.3x): Soil, forest floor, wood chips, tall grass
 Challenging (1.3-1.6x): Sand, mud, loose gravel, scree, snow
 Difficult (1.6-2.0x): Rock, boulders, swamp, ice
 """
+
+
 def get_surface_difficulty_multiplier(surface_type):
     """Get difficulty multiplier based on terrain surface type"""
     surface_multipliers = {
@@ -1033,44 +1039,51 @@ async def get_trail_3d_dem(trail_id: int):
     """Get 3D DEM data for a specific trail"""
     try:
         print(f"Getting 3D DEM data for trail ID: {trail_id}")
-        
+
         # Get the trail from database
-        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
         if not trail_response.data:
             raise HTTPException(status_code=404, detail="Trail not found")
-        
+
         trail = trail_response.data[0]
         trail_coords = trail.get("coordinates", [])
-        
+
         if not trail_coords:
             raise HTTPException(status_code=400, detail="Trail has no coordinate data")
-        
-        print(f"Processing DEM for trail: {trail.get('name', 'Unknown')} with {len(trail_coords)} coordinates")
-        
+
+        print(
+            f"Processing DEM for trail: {trail.get('name', 'Unknown')} with {len(trail_coords)} coordinates"
+        )
+
         # Find relevant DEM tiles
         dem_files = find_relevant_dem_tiles(trail_coords)
         if not dem_files:
-            raise HTTPException(status_code=404, detail="No DEM data available for this trail area")
-        
+            raise HTTPException(
+                status_code=404, detail="No DEM data available for this trail area"
+            )
+
         print(f"Found {len(dem_files)} DEM files")
-        
+
         # Process DEM data
         dem_data = process_dem_for_trail(trail_coords, dem_files)
         if not dem_data:
             raise HTTPException(status_code=500, detail="Failed to process DEM data")
-        
+
         return {
             "success": True,
             "trail_name": trail.get("name", "Unknown Trail"),
             "trail_id": trail_id,
-            "dem_data": dem_data
+            "dem_data": dem_data,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         print(f"3D DEM error: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1105,16 +1118,16 @@ async def get_map():
 
         # Create a map centered on Brisbane for multiple trails
         m = folium.Map(
-            location=[-27.4698, 152.9560], 
+            location=[-27.4698, 152.9560],
             zoom_start=12,
-            tiles='OpenStreetMap',  # Better base layer
-            control_scale=True,     # Add scale control
-            prefer_canvas=False     # Ensure interactive behavior
+            tiles="OpenStreetMap",  # Better base layer
+            control_scale=True,  # Add scale control
+            prefer_canvas=False,  # Ensure interactive behavior
         )
 
         # Collect all coordinates to calculate bounds
         all_coordinates = []
-        
+
         # Color palette for different trails
         colors = ["blue", "red", "green", "purple", "orange", "darkred", "lightred"]
 
@@ -1125,7 +1138,7 @@ async def get_map():
             if coordinates:
                 # Add all coordinates to bounds calculation
                 all_coordinates.extend(coordinates)
-                
+
                 # Add polyline for this trail with better styling
                 folium.PolyLine(
                     coordinates,
@@ -1143,26 +1156,32 @@ async def get_map():
                             <p style="margin: 5px 0;"><strong>Max Elevation:</strong> {trail.get('max_elevation', 0)} m</p>
                         </div>
                         """,
-                        max_width=250
-                    )
+                        max_width=250,
+                    ),
                 ).add_to(m)
 
                 # Add start marker with better styling
                 start_coord = coordinates[0]
                 folium.Marker(
                     start_coord,
-                    popup=folium.Popup(f"<strong>Start:</strong> {trail.get('name', 'Unnamed Trail')}", max_width=200),
+                    popup=folium.Popup(
+                        f"<strong>Start:</strong> {trail.get('name', 'Unnamed Trail')}",
+                        max_width=200,
+                    ),
                     tooltip="Trail Start",
-                    icon=folium.Icon(color="green", icon="play", prefix="fa")
+                    icon=folium.Icon(color="green", icon="play", prefix="fa"),
                 ).add_to(m)
 
                 # Add end marker with better styling
                 end_coord = coordinates[-1]
                 folium.Marker(
                     end_coord,
-                    popup=folium.Popup(f"<strong>End:</strong> {trail.get('name', 'Unnamed Trail')}", max_width=200),
+                    popup=folium.Popup(
+                        f"<strong>End:</strong> {trail.get('name', 'Unnamed Trail')}",
+                        max_width=200,
+                    ),
                     tooltip="Trail End",
-                    icon=folium.Icon(color="red", icon="stop", prefix="fa")
+                    icon=folium.Icon(color="red", icon="stop", prefix="fa"),
                 ).add_to(m)
 
         # Fit map bounds to show all trails
@@ -1170,19 +1189,19 @@ async def get_map():
             # Calculate bounds
             lats = [coord[0] for coord in all_coordinates]
             lons = [coord[1] for coord in all_coordinates]
-            
+
             # Add some padding to the bounds
             lat_padding = (max(lats) - min(lats)) * 0.1
             lon_padding = (max(lons) - min(lons)) * 0.1
-            
+
             bounds = [
                 [min(lats) - lat_padding, min(lons) - lon_padding],
-                [max(lats) + lat_padding, max(lons) + lon_padding]
+                [max(lats) + lat_padding, max(lons) + lon_padding],
             ]
-            
+
             m.fit_bounds(bounds)
-        
-        folium.TileLayer('OpenStreetMap').add_to(m)
+
+        folium.TileLayer("OpenStreetMap").add_to(m)
 
         # Add JavaScript for trail click handling
         trail_data_js = f"""
@@ -1358,7 +1377,7 @@ async def upload_gpx(file: UploadFile = File(...)):
         # Rolling hills index (advanced)
         rolling_hills_index = round(analyze_rolling_hills(elevations, distances), 2)
 
-        # Surface difficulty analysis
+        # Create elevation profile data
         elevation_profile_data = [
             {
                 "distance": round(dist, 2),
@@ -1367,14 +1386,6 @@ async def upload_gpx(file: UploadFile = File(...)):
             }
             for i, (dist, ele) in enumerate(zip(distances, elevations))
         ]
-
-        surface_segments = estimate_surface_type_from_terrain(
-            coords, elevation_profile_data
-        )
-        surface_difficulty_score = calculate_surface_difficulty_score(surface_segments)
-        surface_description = get_surface_difficulty_description(
-            surface_difficulty_score, surface_segments
-        )
 
         # Slope analysis
         if slopes and len(slopes) > 1:  # Skip first element (always 0)
@@ -1419,19 +1430,11 @@ async def upload_gpx(file: UploadFile = File(...)):
                 )
                 seg_start_idx = seg_end_idx
 
-        # Enhanced difficulty calculation including surface type
+        # Simple difficulty calculation
         distance_factor = min(total_distance / 10, 1) * 3
         elevation_factor = min(elevation_gain / 1000, 1) * 4
         rolling_factor = rolling_hills_index * 3
-        surface_factor = (
-            surface_difficulty_score - 1.0
-        ) * 2  # Surface difficulty adjustment
-
-        # Base difficulty score
-        base_difficulty_score = distance_factor + elevation_factor + rolling_factor
-
-        # Apply surface difficulty multiplier
-        difficulty_score = base_difficulty_score * surface_difficulty_score
+        difficulty_score = distance_factor + elevation_factor + rolling_factor
 
         if difficulty_score <= 3:
             difficulty_level = "Easy"
@@ -1506,27 +1509,20 @@ async def upload_gpx(file: UploadFile = File(...)):
             "max_slope": round(max_slope, 2),
             "avg_slope": round(avg_slope, 2),
             "segments": segments,
-            # Enhanced effort estimation using Naismith's Rule + terrain adjustments + surface difficulty
+            # Enhanced effort estimation using Naismith's Rule + terrain adjustments
             "estimated_time_hours": round(
-                (
-                    (total_distance / 5)
-                    + (elevation_gain / 600)
-                    + (rolling_hills_index * 0.5)
-                )
-                * surface_difficulty_score,
+                (total_distance / 5)
+                + (elevation_gain / 600)
+                + (rolling_hills_index * 0.5),
                 2,
             ),
-            # Surface difficulty information
-            "surface_difficulty_score": round(surface_difficulty_score, 2),
-            "surface_segments": surface_segments,
-            "surface_description": surface_description,
             # Improved analytics fields (using existing column names)
             "terrain_variety_score": terrain_variety,
             "elevation_change_total": int(round(elevation_gain + elevation_loss, 0)),
             # Store weather data in existing numeric fields, we'll interpret on frontend
             "weather_difficulty_multiplier": weather_score,  # Use existing column with new meaning
             "technical_rating": min(
-                10, int(max_slope / 10 + rolling_hills_index * 5 + surface_factor + 1)
+                10, int(max_slope / 10 + rolling_hills_index * 5 + 1)
             ),  # 1-10 technical difficulty
         }
 
@@ -1555,22 +1551,28 @@ async def get_trail_3d_terrain_viewer(trail_id: int):
     """Serve interactive 3D terrain visualization as a standalone HTML page"""
     try:
         if not dem_analyzer:
-            return JSONResponse({"error": "DEM analyzer not available"}, status_code=503)
-        
+            return JSONResponse(
+                {"error": "DEM analyzer not available"}, status_code=503
+            )
+
         # Get trail data
-        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
         if not trail_response.data:
             return JSONResponse({"error": "Trail not found"}, status_code=404)
-        
+
         trail = trail_response.data[0]
         coordinates = trail.get("coordinates", [])
-        
+
         if not coordinates:
             return JSONResponse({"error": "No coordinates available"}, status_code=400)
-        
+
         # Generate 3D visualization
-        visualization_result = dem_analyzer.create_3d_terrain_visualization(coordinates, buffer_meters=1000)
-        
+        visualization_result = dem_analyzer.create_3d_terrain_visualization(
+            coordinates, buffer_meters=1000
+        )
+
         if not visualization_result.get("success"):
             error_html = f"""
             <!DOCTYPE html>
@@ -1583,7 +1585,7 @@ async def get_trail_3d_terrain_viewer(trail_id: int):
             </html>
             """
             return HTMLResponse(content=error_html, status_code=500)
-        
+
         # Return interactive HTML if available
         if visualization_result.get("type") == "interactive":
             return HTMLResponse(content=visualization_result["html_content"])
@@ -1608,7 +1610,7 @@ async def get_trail_3d_terrain_viewer(trail_id: int):
             </html>
             """
             return HTMLResponse(content=static_html)
-    
+
     except Exception as e:
         print(f"3D terrain viewer error: {e}")
         error_html = f"""
@@ -1639,33 +1641,46 @@ async def get_trail_dem_analysis(trail_id: int):
     """Analyze DEM data for a specific trail using real DEM files"""
     try:
         if not dem_analyzer:
-            return {"success": False, "error": "DEM analyzer not available. Check DEM file path and dependencies."}
-        
+            return {
+                "success": False,
+                "error": "DEM analyzer not available. Check DEM file path and dependencies.",
+            }
+
         # Get trail data
-        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
         if not trail_response.data:
             raise HTTPException(status_code=404, detail="Trail not found")
-        
+
         trail = trail_response.data[0]
         coordinates = trail.get("coordinates", [])
-        
+
         if not coordinates:
-            return {"success": False, "error": "No coordinates available for this trail"}
-        
-        print(f"Analyzing trail '{trail.get('name')}' with {len(coordinates)} coordinate points")
-        
+            return {
+                "success": False,
+                "error": "No coordinates available for this trail",
+            }
+
+        print(
+            f"Analyzing trail '{trail.get('name')}' with {len(coordinates)} coordinate points"
+        )
+
         # Extract real elevation profile from DEM data
         elevation_analysis = dem_analyzer.extract_elevation_profile(coordinates)
-        
+
         if not elevation_analysis.get("success"):
-            return {"success": False, "error": elevation_analysis.get("error", "Analysis failed")}
-        
+            return {
+                "success": False,
+                "error": elevation_analysis.get("error", "Analysis failed"),
+            }
+
         # Analyze terrain features
         terrain_features = dem_analyzer.analyze_terrain_features(coordinates)
-        
+
         # Generate 3D visualization
         visualization_3d = dem_analyzer.create_3d_terrain_visualization(coordinates)
-        
+
         result = {
             "success": True,
             "trail_name": trail.get("name"),
@@ -1676,12 +1691,12 @@ async def get_trail_dem_analysis(trail_id: int):
                 "resolution": "1 meter",
                 "data_source": "Queensland Government DEM",
                 "coordinate_system": "GDA94 MGA Zone 56",
-                "accuracy": "±0.5 meters"
-            }
+                "accuracy": "±0.5 meters",
+            },
         }
-        
+
         return result
-    
+
     except Exception as e:
         print(f"DEM analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1693,27 +1708,33 @@ async def get_trail_3d_terrain(trail_id: int):
     try:
         if not dem_analyzer:
             return {"success": False, "error": "DEM analyzer not available"}
-        
+
         # Get trail data
-        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
         if not trail_response.data:
             raise HTTPException(status_code=404, detail="Trail not found")
-        
+
         trail = trail_response.data[0]
         coordinates = trail.get("coordinates", [])
-        
+
         if not coordinates:
             return {"success": False, "error": "No coordinates available"}
-        
+
         # Generate 3D visualization
-        visualization_result = dem_analyzer.create_3d_terrain_visualization(coordinates, buffer_meters=1000)
-        
+        visualization_result = dem_analyzer.create_3d_terrain_visualization(
+            coordinates, buffer_meters=1000
+        )
+
         if not visualization_result.get("success"):
             return {
-                "success": False, 
-                "error": visualization_result.get("error", "Failed to generate 3D visualization")
+                "success": False,
+                "error": visualization_result.get(
+                    "error", "Failed to generate 3D visualization"
+                ),
             }
-        
+
         # Return based on visualization type
         if visualization_result.get("type") == "interactive":
             return {
@@ -1721,7 +1742,7 @@ async def get_trail_3d_terrain(trail_id: int):
                 "trail_name": trail.get("name"),
                 "visualization_type": "interactive",
                 "visualization_html": visualization_result["html_content"],
-                "description": visualization_result["description"]
+                "description": visualization_result["description"],
             }
         else:
             # Static visualization
@@ -1730,9 +1751,9 @@ async def get_trail_3d_terrain(trail_id: int):
                 "trail_name": trail.get("name"),
                 "visualization_type": "static",
                 "visualization": f"data:image/png;base64,{visualization_result['image_base64']}",
-                "description": visualization_result["description"]
+                "description": visualization_result["description"],
             }
-    
+
     except Exception as e:
         print(f"3D terrain error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1749,37 +1770,39 @@ async def get_dem_coverage():
                 "troubleshooting": {
                     "check_path": "backend/data/QLD Government/DEM/1 Metre",
                     "required_packages": ["rasterio", "geopandas", "pyproj"],
-                    "file_format": ".tif files"
-                }
+                    "file_format": ".tif files",
+                },
             }
-        
+
         # Get actual file information
         dem_files = dem_analyzer.dem_files
         total_size_mb = 0
-        
+
         file_info = []
         for dem_file in dem_files[:10]:  # Show first 10 files as examples
             try:
                 size_mb = os.path.getsize(dem_file) / (1024 * 1024)
                 total_size_mb += size_mb
-                
+
                 # Extract coordinate info from filename
                 filename = os.path.basename(dem_file)
-                file_info.append({
-                    "filename": filename,
-                    "size_mb": round(size_mb, 2),
-                    "path": dem_file
-                })
+                file_info.append(
+                    {
+                        "filename": filename,
+                        "size_mb": round(size_mb, 2),
+                        "path": dem_file,
+                    }
+                )
             except:
                 continue
-        
+
         # Estimate total size for all files
         if len(dem_files) > 10:
             avg_size = total_size_mb / len(file_info) if file_info else 50
             estimated_total_mb = avg_size * len(dem_files)
         else:
             estimated_total_mb = total_size_mb
-        
+
         coverage_info = {
             "available": True,
             "total_files": len(dem_files),
@@ -1790,11 +1813,11 @@ async def get_dem_coverage():
             "years_available": ["2009", "2014", "2019"],
             "estimated_size_gb": round(estimated_total_mb / 1024, 2),
             "sample_files": file_info,
-            "data_path": dem_analyzer.dem_base_path
+            "data_path": dem_analyzer.dem_base_path,
         }
-        
+
         return {"success": True, "coverage": coverage_info}
-        
+
     except Exception as e:
         return {"success": False, "error": str(e)}
 
