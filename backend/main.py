@@ -101,39 +101,111 @@ measure ‘bumpiness’, meaningful ups/downs over 1 meter
 """
 
 
-def analyze_rolling_hills(elevations, distances):
-    """Advanced rolling hills analysis: counts and scores significant ascents/descents"""
-    if len(elevations) < 3:
-        return 0.0
+def count_rolling_hills(elevations):
+    """
+    Count the number of distinct "hills" (peaks and valleys) in the elevation profile.
 
-    threshold = 1  # meters, what counts as a 'hill'
+    Algorithm:
+    1. Identify all local peaks (higher than neighbors)
+    2. Identify all local valleys (lower than neighbors)
+    3. Total hills = peaks + valleys (each represents a direction change)
+
+    A "significant" peak/valley must have at least 3m elevation difference from neighbors
+    to filter out GPS noise.
+
+    Args:
+        elevations: List of elevation values in meters
+
+    Returns:
+        int: Number of distinct hills (peaks + valleys)
+    """
+    if len(elevations) < 3:
+        return 0
+
+    # Minimum elevation change to be considered significant
+    # 1m threshold catches most noticeable hills while filtering extreme GPS noise
+    min_prominence = 1.0  # meters
+
+    peaks = 0
+    valleys = 0
+
+    for i in range(1, len(elevations) - 1):
+        prev_elev = elevations[i - 1]
+        curr_elev = elevations[i]
+        next_elev = elevations[i + 1]
+
+        # Check if this is a local peak (higher than both neighbors)
+        if curr_elev > prev_elev and curr_elev > next_elev:
+            # Check if it's significant enough
+            if (curr_elev - prev_elev >= min_prominence) or (
+                curr_elev - next_elev >= min_prominence
+            ):
+                peaks += 1
+
+        # Check if this is a local valley (lower than both neighbors)
+        elif curr_elev < prev_elev and curr_elev < next_elev:
+            # Check if it's significant enough
+            if (prev_elev - curr_elev >= min_prominence) or (
+                next_elev - curr_elev >= min_prominence
+            ):
+                valleys += 1
+
+    # Total number of hills = peaks + valleys
+    # Each represents a change in terrain direction
+    total_hills = peaks + valleys
+
+    return total_hills
+
+
+def analyze_rolling_hills(elevations, distances):
+    """Advanced rolling hills analysis: counts and scores significant ascents/descents
+
+    Returns:
+        tuple: (rolling_index: float, hills_count: int)
+    """
+    if len(elevations) < 3:
+        return 0.0, 0
+
+    # Count actual hills (peaks and valleys)
+    hills_count = count_rolling_hills(elevations)
+
+    # For the rolling index calculation, count significant elevation changes
+    threshold = 1  # meters, what counts as a significant change
     significant_changes = []
     for i in range(1, len(elevations)):
         change = elevations[i] - elevations[i - 1]
         if abs(change) >= threshold:
             significant_changes.append(abs(change))
 
-    # Frequency: how many significant hills per km
+    # Frequency: how many significant changes per km
     total_distance = distances[-1] if distances else 1
-    hills_per_km = (
+    changes_per_km = (
         len(significant_changes) / total_distance if total_distance > 0 else 0
     )
 
-    # Amplitude: average size of significant hills
-    avg_hill_size = (
+    # Amplitude: average size of significant changes
+    avg_change_size = (
         sum(significant_changes) / len(significant_changes)
         if significant_changes
         else 0
     )
 
     # Composite index: weighted sum (tweak weights as needed)
-    rolling_index = 0.6 * hills_per_km + 0.4 * (
-        avg_hill_size / 20
+    rolling_index = 0.6 * changes_per_km + 0.4 * (
+        avg_change_size / 20
     )  # typical big hills are ~20 m per hill
 
-    # Normalize to 0-1 scale
-    normalized_index = min(rolling_index, 1.0)
-    return normalized_index
+    # Debug output
+    print(f"🔍 Rolling Hills Debug:")
+    print(f"   - Actual hills (peaks + valleys): {hills_count}")
+    print(f"   - Significant elevation changes: {len(significant_changes)}")
+    print(f"   - Total distance: {total_distance:.2f} km")
+    print(f"   - Changes per km: {changes_per_km:.2f}")
+    print(f"   - Avg change size: {avg_change_size:.2f} m")
+    print(f"   - Rolling index (UNCAPPED): {rolling_index:.4f}")
+
+    # Return both the rolling index and the count
+    return rolling_index, hills_count
 
 
 """
@@ -1390,8 +1462,16 @@ async def upload_gpx(file: UploadFile = File(...)):
         max_elevation = max(elevations) if elevations else 0
         min_elevation = min(elevations) if elevations else 0
 
-        # Rolling hills index (advanced)
-        rolling_hills_index = round(analyze_rolling_hills(elevations, distances), 2)
+        # Rolling hills analysis (advanced) - returns index and count
+        rolling_hills_index, rolling_hills_count = analyze_rolling_hills(
+            elevations, distances
+        )
+        rolling_hills_index = round(rolling_hills_index, 2)
+        print(f"🔍 DEBUG: Rolling Hills Index calculated: {rolling_hills_index}")
+        print(f"🔍 DEBUG: Rolling Hills Count: {rolling_hills_count}")
+        print(
+            f"🔍 DEBUG: Elevations count: {len(elevations)}, Distance: {distances[-1] if distances else 0} km"
+        )
 
         # Create elevation profile data
         elevation_profile_data = [
@@ -1447,10 +1527,16 @@ async def upload_gpx(file: UploadFile = File(...)):
                 seg_start_idx = seg_end_idx
 
         # Simple difficulty calculation
-        distance_factor = min(total_distance / 10, 1) * 3
-        elevation_factor = min(elevation_gain / 1000, 1) * 4
-        rolling_factor = rolling_hills_index * 3
-        difficulty_score = distance_factor + elevation_factor + rolling_factor
+        distance_factor = min(total_distance / 10, 1) * 3  # 0-3 points
+        elevation_factor = min(elevation_gain / 1000, 1) * 4  # 0-4 points
+        # Normalize rolling hills index (typically 0-50 range) to 0-1, then scale to 0-3 points
+        normalized_rolling = min(
+            rolling_hills_index / 50, 1
+        )  # Cap at 50 for normalization
+        rolling_factor = normalized_rolling * 3  # 0-3 points
+        difficulty_score = (
+            distance_factor + elevation_factor + rolling_factor
+        )  # Max = 10 points
 
         if difficulty_score <= 3:
             difficulty_level = "Easy"
@@ -1518,6 +1604,7 @@ async def upload_gpx(file: UploadFile = File(...)):
             "max_elevation": int(round(max_elevation, 0)),
             "min_elevation": int(round(min_elevation, 0)),
             "rolling_hills_index": rolling_hills_index,
+            "rolling_hills_count": rolling_hills_count,  # Number of significant elevation changes
             "difficulty_score": round(difficulty_score, 1),
             "difficulty_level": difficulty_level,
             "coordinates": coords,
@@ -1537,9 +1624,22 @@ async def upload_gpx(file: UploadFile = File(...)):
             "elevation_change_total": int(round(elevation_gain + elevation_loss, 0)),
             # Store weather data in existing numeric fields, we'll interpret on frontend
             "weather_difficulty_multiplier": weather_score,  # Use existing column with new meaning
-            "technical_rating": min(
-                10, int(max_slope / 10 + rolling_hills_index * 5 + 1)
-            ),  # 1-10 technical difficulty
+            # More sensitive technical difficulty calculation (1-10 scale)
+            # Factors: max slope (40%), rolling hills (30%), avg slope (30%)
+            # This spreads trails across the scale better
+            "technical_rating": max(
+                1,
+                min(
+                    10,
+                    round(
+                        1
+                        + (max_slope / 40)
+                        * 3.5  # Max slope contribution (0-3.5 points)
+                        + (rolling_hills_index * 2.5)  # Rolling hills (0-2.5+ points)
+                        + (avg_slope / 8) * 3  # Average slope matters too (0-3 points)
+                    ),
+                ),
+            ),
         }
 
         # Insert trail into Supabase database

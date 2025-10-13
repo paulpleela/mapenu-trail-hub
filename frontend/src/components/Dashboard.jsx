@@ -56,37 +56,20 @@ const getTerrainVarietyDescription = (score) => {
   return "Flat or very consistent terrain";
 };
 
-// Helper function for weather exposure
-const getWeatherExposureFromScore = (score) => {
-  // Handle null, undefined, or invalid values
-  if (score === null || score === undefined || isNaN(score)) {
-    return {
-      level: "Unknown",
-      factors: ["Weather exposure data not available"],
-    };
+// Helper function to normalize rolling hills index for display (0-10 scale)
+const normalizeRollingHillsForDisplay = (rawIndex) => {
+  if (rawIndex === null || rawIndex === undefined || isNaN(rawIndex)) {
+    return 0;
   }
-
-  const numScore = Number(score);
-  if (numScore >= 1.25)
-    return {
-      level: "High",
-      factors: ["Rapid weather changes", "Snow/ice risk", "High wind exposure"],
-    };
-  if (numScore >= 1.15)
-    return {
-      level: "Moderate",
-      factors: ["Cooler temperatures", "Wind exposure", "Potential fog"],
-    };
-  if (numScore >= 1.05)
-    return {
-      level: "Low-Moderate",
-      factors: ["Slightly cooler temps", "Some wind exposure"],
-    };
-  return {
-    level: "Low",
-    factors: ["Minimal weather impact", "Protected terrain"],
-  };
+  // Use logarithmic scale to map wide range to 0-10
+  // Most trails are 10-50, extreme trails can be 100+
+  // Formula: 10 * (1 - e^(-rawIndex/15))
+  // This maps: 0→0, 15→6.3, 30→8.6, 45→9.5, 60→9.8, 100→9.99
+  const normalized = 10 * (1 - Math.exp(-rawIndex / 15));
+  return Math.min(10, normalized); // Cap at 10
 };
+
+// Removed getWeatherExposureFromScore function - weather feature disabled
 
 // Folium Map Component - shows all trails
 const FoliumMap = ({ onTrailClick, trails }) => {
@@ -294,7 +277,6 @@ export default function Dashboard() {
   const [selectedTrail, setSelectedTrail] = useState(null);
   const [similarTrails, setSimilarTrails] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  const [weatherData, setWeatherData] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
@@ -302,6 +284,12 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showInfoPage, setShowInfoPage] = useState(false);
+
+  // DEM and terrain state
+  const [demData, setDemData] = useState(null);
+  const [demCoverage, setDemCoverage] = useState(null);
+  const [terrain3D, setTerrain3D] = useState(null);
+  const [loading3D, setLoading3D] = useState(false);
 
   // Load trails on component mount
   useEffect(() => {
@@ -345,24 +333,6 @@ export default function Dashboard() {
       setSimilarTrails([]);
     }
   };
-
-  const loadWeatherData = async (trailId) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/trail/${trailId}/weather`);
-      const data = await response.json();
-      if (data.success) {
-        setWeatherData(data);
-      }
-    } catch (err) {
-      console.error("Failed to load weather data:", err);
-      setWeatherData(null);
-    }
-  };
-
-  const [demData, setDemData] = useState(null);
-  const [demCoverage, setDemCoverage] = useState(null);
-  const [terrain3D, setTerrain3D] = useState(null);
-  const [loading3D, setLoading3D] = useState(false);
 
   // Multi-source elevation data
   const [elevationSources, setElevationSources] = useState(null);
@@ -524,7 +494,6 @@ export default function Dashboard() {
     if (trail) {
       setSelectedTrail(trail);
       loadSimilarTrails(trail.id); // Load similar trails
-      loadWeatherData(trail.id); // Load live weather data
       loadDemData(trail.id); // Load DEM analysis data
     } else {
       // Create a temporary trail object from the clicked data
@@ -544,7 +513,6 @@ export default function Dashboard() {
       setSelectedTrail(tempTrail);
       if (tempTrail.id) {
         loadSimilarTrails(tempTrail.id);
-        loadWeatherData(tempTrail.id);
         loadDemData(tempTrail.id);
       }
     }
@@ -1007,13 +975,19 @@ export default function Dashboard() {
                       <div
                         className="bg-gradient-to-r from-blue-500 to-purple-600 h-4 rounded-full shadow-sm transition-all duration-300"
                         style={{
-                          width: `${selectedTrail?.rolling_hills_index * 100}%`,
+                          width: `${
+                            normalizeRollingHillsForDisplay(
+                              selectedTrail?.rolling_hills_index
+                            ) * 10
+                          }%`,
                         }}
                       />
                     </div>
                     <p className="text-sm text-gray-600 font-medium">
-                      {(selectedTrail?.rolling_hills_index * 100).toFixed(1)}%
-                      terrain intensity
+                      {normalizeRollingHillsForDisplay(
+                        selectedTrail?.rolling_hills_index
+                      ).toFixed(1)}
+                      /10 terrain intensity
                     </p>
                   </div>
                 </CardContent>
@@ -1353,9 +1327,18 @@ export default function Dashboard() {
                   <StatCard
                     icon={Activity}
                     label="Rolling Intensity"
-                    value={(selectedTrail?.rolling_hills_index * 10).toFixed(1)}
+                    value={normalizeRollingHillsForDisplay(
+                      selectedTrail?.rolling_hills_index
+                    ).toFixed(1)}
                     unit="/10"
                     tooltip="How much the trail goes up and down - higher = more tiring"
+                  />
+                  <StatCard
+                    icon={TrendingUp}
+                    label="Hills Count"
+                    value={selectedTrail?.rolling_hills_count || 0}
+                    unit="hills"
+                    tooltip="Number of significant elevation changes (1m+ threshold) on the trail"
                   />
                 </div>
               </CardContent>
@@ -1373,70 +1356,7 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Live Weather Impact Box */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Info className="w-5 h-5 text-blue-600" />
-                        <h4 className="font-semibold text-gray-800">
-                          Current Weather Impact
-                        </h4>
-                        {weatherData && (
-                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold">
-                            Live
-                          </span>
-                        )}
-                        {selectedTrail?.id && (
-                          <button
-                            onClick={() => loadWeatherData(selectedTrail.id)}
-                            className="ml-auto p-1 hover:bg-blue-200 rounded text-blue-600"
-                            title="Refresh weather data"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      {weatherData ? (
-                        <>
-                          <p className="text-sm text-gray-700 mb-2">
-                            <strong>Conditions:</strong>{" "}
-                            {weatherData.live_weather.conditions}
-                          </p>
-                          <p className="text-sm text-gray-700 mb-2">
-                            <strong>Difficulty Multiplier:</strong>{" "}
-                            {weatherData.live_weather.multiplier}x
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            {weatherData.live_weather.explanation}
-                          </p>
-                          {weatherData.updated_difficulty && (
-                            <div className="mt-2 p-2 bg-blue-100 rounded text-xs">
-                              <strong>Adjusted Difficulty:</strong>{" "}
-                              {weatherData.updated_difficulty.base_difficulty} →{" "}
-                              {weatherData.updated_difficulty.weather_adjusted}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm text-gray-700 mb-2">
-                            <strong>Exposure Level:</strong>{" "}
-                            {
-                              getWeatherExposureFromScore(
-                                selectedTrail?.weather_difficulty_multiplier
-                              ).level
-                            }
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Risk factors:{" "}
-                            {getWeatherExposureFromScore(
-                              selectedTrail?.weather_difficulty_multiplier
-                            ).factors.join(", ")}
-                          </p>
-                        </>
-                      )}
-                    </div>
-
+                  <div className="grid grid-cols-1 gap-6">
                     {/* Terrain Analysis Box */}
                     <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-2">
@@ -1474,7 +1394,9 @@ export default function Dashboard() {
                       </p>
                       <p className="text-sm text-gray-700 mb-2">
                         <strong>Rolling Intensity:</strong>{" "}
-                        {(selectedTrail?.rolling_hills_index * 10).toFixed(1)}
+                        {normalizeRollingHillsForDisplay(
+                          selectedTrail?.rolling_hills_index
+                        ).toFixed(1)}
                         /10
                       </p>
                       <p className="text-sm text-gray-600">
@@ -1688,56 +1610,65 @@ export default function Dashboard() {
                           </div>
                         )}
 
-                          {/* 3D Terrain Visualization */}
-                          <div className="bg-white rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <h5 className="font-semibold text-gray-800">3D Terrain Visualization</h5>
-                              {loading3D && (
-                                <div className="flex items-center text-blue-600 text-xs">
-                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
-                                  Generating...
-                                </div>
-                              )}
-                            </div>
-                            
-                            {terrain3D?.visualization_type === 'interactive' && terrain3D?.visualization_html ? (
-                              <div className="text-center">
-                                <div className="w-full h-screen rounded-lg border shadow-lg overflow-hidden">
-                                  <iframe
-                                    src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
-                                    className="w-full h-full border-0"
-                                    title="Interactive 3D Terrain Visualization"
-                                    sandbox="allow-scripts allow-same-origin"
-                                    loading="lazy"
-                                  />
-                                </div>
-                                <p className="text-xs text-gray-600 mt-2">
-                                  🎮 Interactive 3D terrain - Click and drag to rotate, scroll to zoom
-                                </p>
+                        {/* 3D Terrain Visualization */}
+                        <div className="bg-white rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="font-semibold text-gray-800">
+                              3D Terrain Visualization
+                            </h5>
+                            {loading3D && (
+                              <div className="flex items-center text-blue-600 text-xs">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                                Generating...
                               </div>
-                            ) : terrain3D?.visualization ? (
-                              <div className="text-center">
-                                <img 
-                                  src={terrain3D.visualization} 
-                                  alt="3D Terrain Visualization"
-                                  className="max-w-full h-auto rounded-lg border"
-                                />
-                                <p className="text-xs text-gray-600 mt-2">
-                                  3D terrain model showing trail path over DEM data
-                                </p>
-                              </div>
-                            ) : terrain3D?.error ? (
-                              <div className="text-center py-4">
-                                <p className="text-red-600 text-sm">{terrain3D.error}</p>
-                              </div>
-                            ) : !terrain3D ? (
-                              <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                                <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                                <p>3D terrain visualization will appear here</p>
-                                <p className="text-xs mt-1">Shows trail path over real DEM elevation data</p>
-                              </div>
-                            ) : null}
+                            )}
                           </div>
+
+                          {terrain3D?.visualization_type === "interactive" &&
+                          terrain3D?.visualization_html ? (
+                            <div className="text-center">
+                              <div className="w-full h-96 rounded-lg border shadow-lg overflow-hidden">
+                                <iframe
+                                  src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
+                                  className="w-full h-full border-0"
+                                  title="Interactive 3D Terrain Visualization"
+                                  sandbox="allow-scripts allow-same-origin"
+                                  loading="lazy"
+                                />
+                              </div>
+                              <p className="text-xs text-gray-600 mt-2">
+                                🎮 Interactive 3D terrain - Click and drag to
+                                rotate, scroll to zoom
+                              </p>
+                            </div>
+                          ) : terrain3D?.visualization ? (
+                            <div className="text-center">
+                              <img
+                                src={terrain3D.visualization}
+                                alt="3D Terrain Visualization"
+                                className="max-w-full h-auto rounded-lg border"
+                              />
+                              <p className="text-xs text-gray-600 mt-2">
+                                3D terrain model showing trail path over DEM
+                                data
+                              </p>
+                            </div>
+                          ) : terrain3D?.error ? (
+                            <div className="text-center py-4">
+                              <p className="text-red-600 text-sm">
+                                {terrain3D.error}
+                              </p>
+                            </div>
+                          ) : !terrain3D ? (
+                            <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                              <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                              <p>3D terrain visualization will appear here</p>
+                              <p className="text-xs mt-1">
+                                Shows trail path over real DEM elevation data
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
 
                         {/* Data Quality Info */}
                         <div className="bg-gradient-to-r from-blue-100 to-green-100 rounded-lg p-3">
