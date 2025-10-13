@@ -152,3 +152,5 @@ local_config.*
 # data/
 backend/data/QSpatial/DEM
 backend/data/QSpatial/metadata
+backend/data/LiDAR/Coottha Mt 1.las
+backend/data/LiDAR/Coottha Mt 1.e57
