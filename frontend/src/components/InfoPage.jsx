@@ -66,7 +66,8 @@ export default function InfoPage({ onClose }) {
               </h2>
               <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6">
                 <p className="text-gray-700 leading-relaxed mb-4">
-                  MAPENU is a specialized trail analysis platform designed for
+                  MAPENU (Mapped Analysis Platform for Elevation and Navigation
+                  Utility) is a specialized trail analysis platform designed for
                   hikers and trail runners. Our primary focus is{" "}
                   <strong className="text-blue-600">
                     identifying and analyzing rolling hills
@@ -158,8 +159,12 @@ export default function InfoPage({ onClose }) {
                     </h4>
                     <ul className="space-y-1 text-sm text-gray-700">
                       <li>✓ Enable high-accuracy GPS mode on your device</li>
-                      <li>✓ Record at 1-5 second intervals for detailed data</li>
-                      <li>✓ Keep phone in an easily accessible pocket/holder</li>
+                      <li>
+                        ✓ Record at 1-5 second intervals for detailed data
+                      </li>
+                      <li>
+                        ✓ Keep phone in an easily accessible pocket/holder
+                      </li>
                       <li>✓ Ensure phone has sufficient battery</li>
                       <li>✓ Start recording before the trail begins</li>
                       <li>✓ Stop recording after completing the trail</li>
@@ -433,7 +438,323 @@ export default function InfoPage({ onClose }) {
               </div>
             </section>
 
-            {/* Section 4: Additional Features */}
+            {/* Section 4: Metrics & Scales */}
+            <section>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Gauge className="w-6 h-6 text-indigo-600" />
+                Metrics & Scales Explained
+              </h2>
+
+              <div className="space-y-6">
+                {/* Difficulty Score Card */}
+                <Card className="border-l-4 border-l-blue-500">
+                  <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <TrendingUp className="w-5 h-5 text-blue-600" />
+                      Difficulty Score (0-10 Scale)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <p className="text-sm text-gray-600 mb-4">
+                      Overall trail difficulty combining distance, elevation,
+                      and terrain complexity.
+                    </p>
+
+                    {/* Formula Breakdown */}
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">
+                        📐 Formula Components:
+                      </h4>
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                          <span className="flex-shrink-0 w-16 h-8 bg-blue-100 text-blue-700 rounded text-sm font-semibold flex items-center justify-center">
+                            0-3 pts
+                          </span>
+                          <div>
+                            <p className="font-medium text-gray-800">
+                              Distance Factor
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              <code className="bg-gray-100 px-2 py-0.5 rounded text-xs">
+                                min(distance / 10, 1) × 3
+                              </code>
+                              <br />
+                              <span className="text-xs">
+                                Examples: 5km = 1.5pts, 10km = 3pts
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <span className="flex-shrink-0 w-16 h-8 bg-green-100 text-green-700 rounded text-sm font-semibold flex items-center justify-center">
+                            0-4 pts
+                          </span>
+                          <div>
+                            <p className="font-medium text-gray-800">
+                              Elevation Factor
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              <code className="bg-gray-100 px-2 py-0.5 rounded text-xs">
+                                min(elevation_gain / 1000, 1) × 4
+                              </code>
+                              <br />
+                              <span className="text-xs">
+                                Examples: 250m = 1pt, 500m = 2pts, 1000m = 4pts
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <span className="flex-shrink-0 w-16 h-8 bg-purple-100 text-purple-700 rounded text-sm font-semibold flex items-center justify-center">
+                            0-3 pts
+                          </span>
+                          <div>
+                            <p className="font-medium text-gray-800">
+                              Rolling Terrain Factor
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              <code className="bg-gray-100 px-2 py-0.5 rounded text-xs">
+                                min(rolling_index / 50, 1) × 3
+                              </code>
+                              <br />
+                              <span className="text-xs">
+                                Examples: Index 10 = 0.6pts, Index 25 = 1.5pts
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Difficulty Levels */}
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-gray-800 mb-2">
+                        🎯 Difficulty Levels:
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                          <p className="text-xs text-green-600 font-semibold mb-1">
+                            EASY
+                          </p>
+                          <p className="text-lg font-bold text-green-700">
+                            0-3
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Beginner friendly
+                          </p>
+                        </div>
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
+                          <p className="text-xs text-yellow-600 font-semibold mb-1">
+                            MODERATE
+                          </p>
+                          <p className="text-lg font-bold text-yellow-700">
+                            3.1-6
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Some challenge
+                          </p>
+                        </div>
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
+                          <p className="text-xs text-orange-600 font-semibold mb-1">
+                            HARD
+                          </p>
+                          <p className="text-lg font-bold text-orange-700">
+                            6.1-8
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Experienced
+                          </p>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                          <p className="text-xs text-red-600 font-semibold mb-1">
+                            EXTREME
+                          </p>
+                          <p className="text-lg font-bold text-red-700">
+                            8.1-10
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Very difficult
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Rolling Intensity Card */}
+                <Card className="border-l-4 border-l-emerald-500">
+                  <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Activity className="w-5 h-5 text-emerald-600" />
+                      Rolling Intensity (0-10 Scale)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <p className="text-sm text-gray-600 mb-4">
+                      Measures how "bumpy" or undulating the trail is. Higher
+                      values mean more tiring up-and-down terrain.
+                    </p>
+
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">
+                        🧮 How It Works:
+                      </h4>
+                      <ul className="text-sm text-gray-600 space-y-2">
+                        <li>• Counts elevation changes &gt; 1 meter</li>
+                        <li>
+                          • <strong>60% weight:</strong> Hills per kilometer
+                          (frequency)
+                        </li>
+                        <li>
+                          • <strong>40% weight:</strong> Average hill size
+                          (amplitude)
+                        </li>
+                        <li>• Displayed on normalized 0-10 scale</li>
+                      </ul>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-green-50 border border-green-200 rounded p-2 text-center">
+                        <p className="text-xs text-green-600 font-semibold">
+                          0-3
+                        </p>
+                        <p className="text-xs text-gray-600">Smooth</p>
+                      </div>
+                      <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-center">
+                        <p className="text-xs text-yellow-600 font-semibold">
+                          3-6
+                        </p>
+                        <p className="text-xs text-gray-600">Moderate</p>
+                      </div>
+                      <div className="bg-orange-50 border border-orange-200 rounded p-2 text-center">
+                        <p className="text-xs text-orange-600 font-semibold">
+                          6-8
+                        </p>
+                        <p className="text-xs text-gray-600">Rolling</p>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded p-2 text-center">
+                        <p className="text-xs text-red-600 font-semibold">
+                          8-10
+                        </p>
+                        <p className="text-xs text-gray-600">Very Rolling</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Hills Count Card */}
+                <Card className="border-l-4 border-l-purple-500">
+                  <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Mountain className="w-5 h-5 text-purple-600" />
+                      Hills Count (Actual Number)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <p className="text-sm text-gray-600 mb-4">
+                      The actual number of distinct peaks and valleys on the
+                      trail.
+                    </p>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">
+                        🏔️ Detection:
+                      </h4>
+                      <ul className="text-sm text-gray-600 space-y-2">
+                        <li>
+                          • <strong>Peak:</strong> Point higher than both
+                          neighbors
+                        </li>
+                        <li>
+                          • <strong>Valley:</strong> Point lower than both
+                          neighbors
+                        </li>
+                        <li>
+                          • <strong>Threshold:</strong> ≥1m elevation difference
+                        </li>
+                        <li>
+                          • <strong>Total:</strong> Peaks + Valleys
+                        </li>
+                      </ul>
+                      <div className="mt-3 bg-blue-50 border border-blue-200 rounded p-2">
+                        <p className="text-xs text-gray-700">
+                          <strong>Example:</strong> "23 hills" = 23 direction
+                          changes (e.g., 12 peaks + 11 valleys)
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Technical Difficulty Card */}
+                <Card className="border-l-4 border-l-rose-500">
+                  <CardHeader className="bg-gradient-to-r from-rose-50 to-pink-50">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Gauge className="w-5 h-5 text-rose-600" />
+                      Technical Difficulty (1-10)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <p className="text-sm text-gray-600 mb-4">
+                      Technical challenge based on slopes and terrain
+                      complexity.
+                    </p>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">
+                        ⚙️ Factors:
+                      </h4>
+                      <ul className="text-sm text-gray-600 space-y-1">
+                        <li>
+                          • <strong>40%:</strong> Maximum slope
+                        </li>
+                        <li>
+                          • <strong>30%:</strong> Rolling hills intensity
+                        </li>
+                        <li>
+                          • <strong>30%:</strong> Average slope
+                        </li>
+                      </ul>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Estimated Time Card */}
+                <Card className="border-l-4 border-l-cyan-500">
+                  <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Info className="w-5 h-5 text-cyan-600" />
+                      Estimated Time
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <p className="text-sm text-gray-600 mb-4">
+                      Based on Naismith's Rule with rolling terrain adjustment.
+                    </p>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">
+                        ⏱️ Formula:
+                      </h4>
+                      <p className="text-sm text-gray-600 mb-2">
+                        <code className="bg-gray-100 px-2 py-0.5 rounded text-xs">
+                          (distance/5) + (elevation/600) + (rolling × 0.5)
+                        </code>
+                      </p>
+                      <ul className="text-xs text-gray-600 space-y-1">
+                        <li>• 5 km/hour base speed</li>
+                        <li>• +1 hour per 600m elevation</li>
+                        <li>• Extra time for rolling terrain</li>
+                      </ul>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </section>
+
+            {/* Section 5: Additional Features */}
             <section>
               <h2 className="text-2xl font-bold text-gray-800 mb-4">
                 Additional Features
@@ -450,11 +771,11 @@ export default function InfoPage({ onClose }) {
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
                   <h3 className="font-semibold text-gray-800 mb-2">
-                    🌤️ Weather Analysis
+                    📐 Measure GPX
                   </h3>
                   <p className="text-sm text-gray-600">
-                    Weather exposure risk based on maximum elevation and terrain
-                    features
+                    Measure distance, elevation gain, and other metrics from GPX
+                    files
                   </p>
                 </div>
                 <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
@@ -507,9 +828,7 @@ export default function InfoPage({ onClose }) {
                     3
                   </span>
                   <div>
-                    <p className="font-semibold text-gray-800">
-                      View Analysis
-                    </p>
+                    <p className="font-semibold text-gray-800">View Analysis</p>
                     <p className="text-sm text-gray-600">
                       Explore rolling hills metrics, elevation profiles, 3D
                       terrain, and difficulty ratings
