@@ -1635,6 +1635,23 @@ async def serve_map_file(filename: str):
     return FileResponse(map_path)
 
 
+@app.get("/static/{filename}")
+async def serve_las_file(filename: str):
+    """Serve LAS files with proper binary headers"""
+    if not filename.endswith('.las'):
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    file_path = os.path.join("data", "LiDAR", filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="LAS file not found")
+    
+    return FileResponse(
+        file_path, 
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
+
+
 # Enhanced DEM/LiDAR Analysis Endpoints
 @app.get("/trail/{trail_id}/dem-analysis")
 async def get_trail_dem_analysis(trail_id: int):

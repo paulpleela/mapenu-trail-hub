@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import {
@@ -25,11 +25,466 @@ import {
   Upload,
   RefreshCw,
   Database,
+  RotateCcw,
+  Download,
 } from "lucide-react";
 import InfoPage from "./InfoPage";
+import * as THREE from 'three';
+import { load } from '@loaders.gl/core';
+import { LASLoader } from '@loaders.gl/las';
 
 // API URL
 const API_BASE_URL = "http://localhost:8000";
+
+// LiDAR Viewer Component
+const LidarViewer = ({ trailName }) => {
+  const viewerRef = useRef(null);
+  const viewRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const resetView = () => {
+    if (viewRef.current && viewRef.current.camera) {
+      viewRef.current.camera.position.set(60, 80, 120);
+      viewRef.current.camera.lookAt(0, 10, 0);
+    }
+  };
+
+  const zoomIn = () => {
+    if (viewRef.current && viewRef.current.camera) {
+      viewRef.current.camera.position.multiplyScalar(0.7);
+    }
+  };
+
+  const zoomOut = () => {
+    if (viewRef.current && viewRef.current.camera) {
+      viewRef.current.camera.position.multiplyScalar(1.3);
+    }
+  };
+
+  useEffect(() => {
+    if (!viewerRef.current) return;
+
+    try {
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x000000);
+      
+      const camera = new THREE.PerspectiveCamera(
+        60,
+        viewerRef.current.clientWidth / viewerRef.current.clientHeight,
+        0.1,
+        10000
+      );
+      camera.position.set(0, 50, 100);
+      
+      const renderer = new THREE.WebGLRenderer({ 
+        antialias: true, // Re-enable for smoother terrain visualization
+        alpha: true,
+        precision: 'mediump', // Keep medium precision as compromise
+        powerPreference: 'high-performance' // Use dedicated GPU if available
+      });
+      renderer.setSize(viewerRef.current.clientWidth, viewerRef.current.clientHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8)); // Slightly higher for detail
+      renderer.sortObjects = false;
+      renderer.shadowMap.enabled = false; // Keep shadows disabled for performance
+      viewerRef.current.appendChild(renderer.domElement);
+      
+      const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+      directionalLight.position.set(100, 100, 50);
+      directionalLight.castShadow = true;
+      scene.add(directionalLight);
+      
+      const gridHelper = new THREE.GridHelper(200, 20, 0x333333, 0x222222);
+      gridHelper.position.y = -20;
+      scene.add(gridHelper);
+      
+      let mouseDown = false;
+      let mouseX = 0;
+      let mouseY = 0;
+      
+      const onMouseDown = (event) => {
+        mouseDown = true;
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+        renderer.domElement.style.cursor = 'grabbing';
+      };
+      
+      const onMouseUp = () => {
+        mouseDown = false;
+        renderer.domElement.style.cursor = 'grab';
+      };
+      
+      const onMouseMove = (event) => {
+        if (!mouseDown) return;
+        
+        const deltaX = event.clientX - mouseX;
+        const deltaY = event.clientY - mouseY;
+        
+        const spherical = new THREE.Spherical();
+        spherical.setFromVector3(camera.position);
+        spherical.theta -= deltaX * 0.01;
+        spherical.phi += deltaY * 0.01;
+        spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+        
+        camera.position.setFromSpherical(spherical);
+        camera.lookAt(0, 0, 0);
+        
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+      };
+      
+      const onWheel = (event) => {
+        event.preventDefault();
+        const scale = event.deltaY > 0 ? 1.05 : 0.95;
+        camera.position.multiplyScalar(scale);
+        
+        const distance = camera.position.length();
+        if (distance < 10) {
+          camera.position.normalize().multiplyScalar(10);
+        } else if (distance > 500) {
+          camera.position.normalize().multiplyScalar(500);
+        }
+      };
+      
+      renderer.domElement.addEventListener('mousedown', onMouseDown);
+      renderer.domElement.addEventListener('mouseup', onMouseUp);
+      renderer.domElement.addEventListener('mousemove', onMouseMove);
+      renderer.domElement.addEventListener('wheel', onWheel);
+      
+      const loadLasFile = async () => {
+        try {
+          console.log('Loading LAS file...');
+          
+          const data = await load('http://localhost:8000/static/trail_1.las', LASLoader, {
+            fetch: {
+              headers: {
+                'Accept': 'application/octet-stream, */*'
+              }
+            }
+          });
+          
+          console.log('LAS file loaded:', data);
+          
+          let positions, colorData, intensityData;
+          
+          if (data.attributes && data.attributes.POSITION) {
+            positions = data.attributes.POSITION.value;
+            colorData = data.attributes.COLOR_0?.value;
+            intensityData = data.attributes.INTENSITY?.value;
+          } else if (data.positions) {
+            positions = data.positions;
+            colorData = data.colors;
+            intensityData = data.intensity;
+          } else {
+            throw new Error('Could not extract point positions from LAS data');
+          }
+          
+          const geometry = new THREE.BufferGeometry();
+          const points = [];
+          const colors = [];
+          
+          const totalPointCount = positions.length / 3;
+          let samplingRate = 1;
+          
+          const maxPoints = 1200000; // Better balance - 1.2M points for detail preservation
+          if (totalPointCount > maxPoints) {
+            samplingRate = Math.ceil(totalPointCount / maxPoints);
+          }
+          
+          let minX = Infinity, maxX = -Infinity;
+          let minY = Infinity, maxY = -Infinity;
+          let minZ = Infinity, maxZ = -Infinity;
+          
+          for (let i = 0; i < positions.length; i += 3 * Math.max(10, samplingRate * 5)) {
+            const x = positions[i];
+            const y = positions[i + 1];
+            const z = positions[i + 2];
+            
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+            minZ = Math.min(minZ, z);
+            maxZ = Math.max(maxZ, z);
+          }
+          
+          const centerX = (minX + maxX) / 2;
+          const centerY = (minY + maxY) / 2;
+          const centerZ = (minZ + maxZ) / 2;
+          
+          const scale = 100 / Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+          
+          let pointsAdded = 0;
+          // Smart sampling: preserve more points for terrain detail
+          for (let i = 0; i < positions.length; i += 3 * Math.max(samplingRate, 8)) {
+            let x = (positions[i] - centerX) * scale;
+            let y = (positions[i + 2] - centerZ) * scale;
+            let z = (positions[i + 1] - centerY) * scale;
+            
+            // Minimal jitter to preserve terrain features
+            x += (Math.random() - 0.5) * 0.02;
+            z += (Math.random() - 0.5) * 0.02;
+            
+            points.push(x, y, z);
+            pointsAdded++;
+            
+            let color = new THREE.Color();
+            
+            if (colorData && (i/3) * 3 < colorData.length) {
+              const colorIndex = (i/3) * 3;
+              const r = colorData[colorIndex] / 65535;
+              const g = colorData[colorIndex + 1] / 65535;
+              const b = colorData[colorIndex + 2] / 65535;
+              
+              if (r > 0.01 || g > 0.01 || b > 0.01) {
+                color.setRGB(r, g, b);
+              } else if (intensityData && intensityData[i/3]) {
+                const intensity = intensityData[i/3] / 65535;
+                color.setRGB(intensity, intensity, intensity);
+              } else {
+                const minElevation = (minZ - centerZ) * scale;
+                const maxElevation = (maxZ - centerZ) * scale;
+                const elevationRange = maxElevation - minElevation;
+                
+                let normalizedHeight = 0.5;
+                if (elevationRange > 0) {
+                  normalizedHeight = Math.max(0, Math.min(1, (y - minElevation) / elevationRange));
+                }
+                
+                if (normalizedHeight < 0.3) {
+                  color.setRGB(0.4, 0.3, 0.2);
+                } else if (normalizedHeight < 0.7) {
+                  color.setRGB(0.3, 0.6, 0.2);
+                } else {
+                  color.setRGB(0.6, 0.5, 0.4);
+                }
+              }
+            } else {
+              const minElevation = (minZ - centerZ) * scale;
+              const maxElevation = (maxZ - centerZ) * scale;
+              const elevationRange = maxElevation - minElevation;
+              
+              let normalizedHeight = 0.5;
+              if (elevationRange > 0) {
+                normalizedHeight = Math.max(0, Math.min(1, (y - minElevation) / elevationRange));
+              }
+              
+              if (normalizedHeight < 0.3) {
+                color.setRGB(0.4, 0.3, 0.2);
+              } else if (normalizedHeight < 0.7) {
+                color.setRGB(0.3, 0.6, 0.2);
+              } else {
+                color.setRGB(0.6, 0.5, 0.4);
+              }
+            }
+            
+            colors.push(color.r, color.g, color.b);
+          }
+          
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+          geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+          
+          const material = new THREE.PointsMaterial({
+            size: 0.6, // Smaller points for better terrain detail visibility
+            vertexColors: true,
+            transparent: true, // Re-enable for better visual blending of terrain   
+            opacity: 0.9, // High opacity to maintain visibility
+            sizeAttenuation: true, 
+            alphaTest: 0.05 // Lower threshold for better detail      
+          });
+          
+          const pointCloud = new THREE.Points(geometry, material);
+          scene.add(pointCloud);
+          
+          camera.position.set(60, 80, 120);
+          camera.lookAt(0, 10, 0);
+          
+          setLoading(false);
+          console.log('Trail point cloud loaded with', points.length / 3, 'points (balanced for terrain detail + performance)');
+          
+        } catch (error) {
+          console.error('Error loading LAS file:', error);
+          setLoading(false);
+          setError(`LAS file loading failed: ${error.message}`);
+        }
+      };
+      
+      loadLasFile();
+      
+      const animate = () => {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+      };
+      animate();
+      
+      viewRef.current = { scene, camera, renderer };
+      
+      const handleResize = () => {
+        if (viewerRef.current) {
+          camera.aspect = viewerRef.current.clientWidth / viewerRef.current.clientHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(viewerRef.current.clientWidth, viewerRef.current.clientHeight);
+        }
+      };
+      
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        renderer.domElement.removeEventListener('mousedown', onMouseDown);
+        renderer.domElement.removeEventListener('mouseup', onMouseUp);
+        renderer.domElement.removeEventListener('mousemove', onMouseMove);
+        renderer.domElement.removeEventListener('wheel', onWheel);
+        if (viewerRef.current && renderer.domElement.parentNode) {
+          viewerRef.current.removeChild(renderer.domElement);
+        }
+        renderer.dispose();
+      };
+
+    } catch (err) {
+      console.error('Error initializing 3D viewer:', err);
+      setError('Failed to initialize 3D viewer');
+      setLoading(false);
+    }
+  }, []);
+
+  return (
+    <div className="w-full h-[500px] bg-black rounded-lg relative">
+      {loading && (
+        <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-10 rounded-lg">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold text-white mb-2">Loading LiDAR Data</h3>
+            <p className="text-gray-300">Processing point cloud for {trailName}...</p>
+          </div>
+        </div>
+      )}
+      
+      {error && (
+        <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-10 rounded-lg">
+          <div className="text-center max-w-md p-6">
+            <div className="text-red-400 mb-4">
+              <Database className="w-16 h-16 mx-auto" />
+            </div>
+            <h3 className="text-lg font-semibold text-white mb-2">LiDAR Load Error</h3>
+            <p className="text-gray-300 text-sm mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div 
+        ref={viewerRef} 
+        className="w-full h-full rounded-lg"
+        style={{ cursor: loading ? 'wait' : 'grab', overflow: 'hidden' }}
+      />
+
+      {/* Controls */}
+      {!loading && !error && (
+        <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={resetView}
+              className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset
+            </button>
+            <button
+              onClick={zoomIn}
+              className="px-2 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+            >
+              Zoom In
+            </button>
+            <button
+              onClick={zoomOut}
+              className="px-2 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"
+            >
+              Zoom Out
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Controls Info */}
+      <div className="absolute bottom-2 left-2 bg-black bg-opacity-70 text-white text-xs px-3 py-2 rounded-lg">
+        <strong>Controls:</strong> Drag to rotate • Scroll to zoom • Optimized for terrain detail visualization
+      </div>
+    </div>
+  );
+};
+
+// LiDAR Upload Component
+const LidarUpload = ({ trailName }) => {
+  const [uploading, setUploading] = useState(false);
+  
+  const handleLidarUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file && file.name.endsWith('.las')) {
+      setUploading(true);
+      // Here you would implement the LiDAR file upload to your backend
+      // For now, just simulate an upload
+      setTimeout(() => {
+        setUploading(false);
+        alert('LiDAR upload functionality coming soon!');
+      }, 2000);
+    }
+    event.target.value = '';
+  };
+
+  return (
+    <div className="w-full h-[500px] bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center">
+      <div className="text-center max-w-md p-6">
+        <div className="p-4 bg-blue-100 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+          <Upload className="w-12 h-12 text-blue-600" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-800 mb-3">Upload LiDAR Data</h3>
+        <p className="text-gray-600 mb-6">
+          Upload a .las file to visualize the 3D point cloud for <strong>{trailName}</strong>
+        </p>
+        
+        <input
+          type="file"
+          accept=".las"
+          onChange={handleLidarUpload}
+          className="hidden"
+          id="lidar-upload"
+          disabled={uploading}
+        />
+        
+        <button
+          onClick={() => document.getElementById('lidar-upload').click()}
+          disabled={uploading}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {uploading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+              Uploading...
+            </>
+          ) : (
+            <>
+              <Upload className="w-4 h-4 mr-2 inline-block" />
+              Choose LAS File
+            </>
+          )}
+        </button>
+        
+        <p className="text-gray-500 text-sm mt-4">
+          Supports .las files up to 100MB. High-resolution point clouds for detailed terrain visualization.
+        </p>
+      </div>
+    </div>
+  );
+};
 
 // Helper function for terrain variety description
 const getTerrainVarietyDescription = (score) => {
@@ -1249,9 +1704,12 @@ export default function Dashboard() {
                         <Mountain className="w-6 h-6 text-indigo-600" />
                       </div>
                       High-Resolution Terrain Data
-                      <span className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                        DEM + LiDAR
-                      </span>
+                      {selectedTrail.name === "Trail 1" && (
+                        <div className="flex items-center gap-2 text-sm text-green-600 ml-auto">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          LiDAR Available
+                        </div>
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -1371,13 +1829,19 @@ export default function Dashboard() {
                           {/* 3D Terrain Visualization */}
                           <div className="bg-white rounded-lg p-4">
                             <div className="flex items-center justify-between mb-3">
-                              <h5 className="font-semibold text-gray-800">3D Terrain Visualization</h5>
+                              <h5 className="font-semibold text-gray-800 flex items-center gap-2">
+                                <Mountain className="w-5 h-5 text-indigo-600" />
+                                Official QSpatial DEM Visualization
+                              </h5>
                               {loading3D && (
                                 <div className="flex items-center text-blue-600 text-xs">
                                   <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
                                   Generating...
                                 </div>
                               )}
+                              <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-semibold">
+                                Brisbane Government Data
+                              </span>
                             </div>
                             
                             {terrain3D?.visualization_type === 'interactive' && terrain3D?.visualization_html ? (
@@ -1413,10 +1877,63 @@ export default function Dashboard() {
                             ) : !terrain3D ? (
                               <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
                                 <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                                <p>3D terrain visualization will appear here</p>
-                                <p className="text-xs mt-1">Shows trail path over real DEM elevation data</p>
+                                <p>Official QSpatial terrain visualization will appear here</p>
+                                <p className="text-xs mt-1">Brisbane Government DEM data with trail path overlay</p>
                               </div>
                             ) : null}
+                          </div>
+
+                          {/* LiDAR Point Cloud Visualization */}
+                          <div className="bg-white rounded-lg p-4 mt-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="font-semibold text-gray-800 flex items-center gap-2">
+                                <Database className="w-5 h-5 text-blue-600" />
+                                User-Supplied LiDAR Data Visualization
+                              </h5>
+                              {selectedTrail.name === "Trail 1" && (
+                                <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-semibold">
+                                  Custom .LAS Upload
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Conditional LiDAR Display */}
+                            {selectedTrail.name === "Trail 1" ? (
+                              <LidarViewer trailName={selectedTrail.name} />
+                            ) : (
+                              <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                                <Upload className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                                <p className="font-semibold mb-2">Upload Your Own LiDAR Data</p>
+                                <p className="text-sm">Upload custom .las files for high-resolution point cloud visualization</p>
+                                <p className="text-xs mt-1">Complements official QSpatial data with user-specific terrain details</p>
+                                <LidarUpload trailName={selectedTrail.name} />
+                              </div>
+                            )}
+                            
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div className="text-center">
+                                  <div className="text-lg font-bold text-blue-600">Point Cloud</div>
+                                  <div className="text-gray-600">LiDAR Technology</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-lg font-bold text-green-600">RGB Colors</div>
+                                  <div className="text-gray-600">Natural Textures</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-lg font-bold text-purple-600">Sub-meter</div>
+                                  <div className="text-gray-600">Accuracy</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-lg font-bold text-red-600">Interactive</div>
+                                  <div className="text-gray-600">3D Navigation</div>
+                                </div>
+                              </div>
+                              <p className="text-gray-600 text-xs mt-3">
+                                <strong>Data Sources:</strong> QSpatial provides official Brisbane Government DEM data, while user-supplied 
+                                LiDAR files offer custom high-resolution point clouds for detailed terrain analysis and trail-specific features.
+                              </p>
+                            </div>
                           </div>
 
                           {/* Data Quality Info */}
@@ -1441,6 +1958,8 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
               )}
+
+
           </>
         ) : (
           <Card className="shadow-lg border-0 bg-gradient-to-br from-gray-50 to-white">
