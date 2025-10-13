@@ -66,7 +66,7 @@ export default function InfoPage({ onClose }) {
               </h2>
               <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-6">
                 <p className="text-gray-700 leading-relaxed mb-4">
-                  MAPENU is a specialized trail analysis platform designed for
+                  MAPENU (Mapped Analysis Platform for Elevation and Navigation Utility) is a specialized trail analysis platform designed for
                   hikers and trail runners. Our primary focus is{" "}
                   <strong className="text-blue-600">
                     identifying and analyzing rolling hills

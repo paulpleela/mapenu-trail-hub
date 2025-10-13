@@ -597,9 +597,9 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Trail Hub</h1>
+              <h1 className="text-2xl font-bold text-gray-900">MAPENU Trail Hub</h1>
               <p className="text-gray-600">
-                Community Trail Analysis & Sharing Platform
+                Mapped Analysis Platform for Elevation and Navigation Utility
               </p>
             </div>
             <div className="flex items-center gap-3">

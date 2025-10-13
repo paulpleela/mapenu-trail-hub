@@ -183,7 +183,7 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 600, margin: '32px auto', padding: 24, background: '#fafbfc', borderRadius: 12, boxShadow: '0 2px 12px #0001' }}>
-      <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 8, color: '#2a2a2a' }}>Trail Hub's GPX Tracker</h1>
+      <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 8, color: '#2a2a2a' }}>MAPENU's GPX Tracker</h1>
       <p style={{ marginTop: 0, color: '#444', fontSize: 15 }}>Records GPS points when you move a specified distance. Built to run on your mobile's web browser.</p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginTop: 18 }}>
