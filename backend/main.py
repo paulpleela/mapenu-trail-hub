@@ -2139,6 +2139,7 @@ async def get_trail_elevation_sources(trail_id: int):
 async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
     """
     Upload a LiDAR .las file to Supabase Storage and store metadata in the database
+    Checks for duplicates before uploading
 
     Args:
         file: LiDAR .las file
@@ -2153,7 +2154,26 @@ async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
                 detail="Invalid file format. Only .las files are supported.",
             )
 
-        # Generate unique filename to avoid conflicts
+        # Check for duplicates in database (by original filename)
+        print(f"🔍 Checking for existing file: {file.filename}")
+        existing_check = (
+            supabase.table("lidar_files")
+            .select("id, filename, file_url")
+            .ilike("filename", f"%{file.filename}")
+            .execute()
+        )
+
+        if existing_check.data:
+            existing_file = existing_check.data[0]
+            print(f"⚠️  File already exists: {existing_file['filename']}")
+            raise HTTPException(
+                status_code=409,
+                detail=f"File '{file.filename}' already exists in database. "
+                f"Existing file: {existing_file['filename']}. "
+                f"Please rename your file or delete the existing one first.",
+            )
+
+        # Generate unique filename to avoid conflicts in storage
         timestamp = uuid.uuid4().hex[:8]
         safe_filename = f"{timestamp}_{file.filename}"
 
@@ -2311,6 +2331,73 @@ async def get_lidar_files():
     except Exception as e:
         print(f"Error fetching LiDAR files: {e}")
         return {"success": False, "error": str(e), "lidar_files": [], "count": 0}
+
+
+@app.delete("/lidar-files/{lidar_id}")
+async def delete_lidar_file(lidar_id: int):
+    """
+    Delete a LiDAR file from both Supabase Storage and database
+
+    Args:
+        lidar_id: ID of the LiDAR file record to delete
+    """
+    try:
+        # Get file info from database
+        print(f"🔍 Looking up LiDAR file with ID: {lidar_id}")
+        file_response = (
+            supabase.table("lidar_files").select("*").eq("id", lidar_id).execute()
+        )
+
+        if not file_response.data:
+            raise HTTPException(
+                status_code=404, detail=f"LiDAR file with ID {lidar_id} not found"
+            )
+
+        file_record = file_response.data[0]
+        filename = file_record.get("filename")
+        file_url = file_record.get("file_url")
+
+        print(f"📂 Found file: {filename}")
+
+        # Delete from Supabase Storage
+        if file_url and filename:
+            try:
+                print(f"🗑️  Deleting from storage: {filename}")
+                storage_delete = supabase.storage.from_("lidar-files").remove(
+                    [filename]
+                )
+                print(f"✅ Deleted from storage: {storage_delete}")
+            except Exception as storage_error:
+                print(f"⚠️  Could not delete from storage: {storage_error}")
+                # Continue with database deletion even if storage deletion fails
+
+        # Delete from database
+        print(f"🗑️  Deleting from database: ID {lidar_id}")
+        db_delete = supabase.table("lidar_files").delete().eq("id", lidar_id).execute()
+        print(f"✅ Deleted from database")
+
+        # Reinitialize LiDAR extractor
+        global lidar_extractor
+        if lidar_extractor:
+            lidar_extractor.lidar_files = lidar_extractor._find_lidar_files()
+            print(
+                f"🔄 LiDAR extractor reinitialized with {len(lidar_extractor.lidar_files)} files"
+            )
+
+        return {
+            "success": True,
+            "message": f"LiDAR file '{filename}' deleted successfully",
+            "deleted_file": file_record,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting LiDAR file: {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
