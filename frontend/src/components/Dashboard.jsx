@@ -2,6 +2,13 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
   LineChart,
   Line,
   XAxis,
@@ -199,7 +206,7 @@ const FoliumMap = ({ onTrailClick, trails }) => {
         className="w-full h-full border-0"
         title="Interactive Trail Map"
         sandbox="allow-scripts allow-same-origin allow-popups"
-        style={{ minHeight: '500px' }}
+        style={{ minHeight: "500px" }}
         loading="lazy"
       />
     </div>
@@ -310,6 +317,7 @@ export default function Dashboard() {
       setTerrain3D(null);
       loadDemData(selectedTrail.id);
       load3DTerrain(selectedTrail.id); // Auto-generate 3D terrain view
+      loadElevationSources(selectedTrail.id); // Load multi-source elevation data
     }
   }, [selectedTrail]);
 
@@ -356,10 +364,62 @@ export default function Dashboard() {
   const [terrain3D, setTerrain3D] = useState(null);
   const [loading3D, setLoading3D] = useState(false);
 
+  // Multi-source elevation data
+  const [elevationSources, setElevationSources] = useState(null);
+  const [selectedElevationSource, setSelectedElevationSource] =
+    useState("Overall");
+  const [loadingElevationSources, setLoadingElevationSources] = useState(false);
+
+  // LiDAR upload
+  const [isUploadingLidar, setIsUploadingLidar] = useState(false);
+  const [lidarUploadSuccess, setLidarUploadSuccess] = useState(false);
+
+  const loadElevationSources = async (trailId) => {
+    setLoadingElevationSources(true);
+    console.log("🔍 Loading elevation sources for trail:", trailId);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/trail/${trailId}/elevation-sources`
+      );
+      const data = await response.json();
+      console.log("📊 Elevation sources response:", data);
+
+      if (data.success) {
+        console.log("✅ Available sources:", {
+          GPX: data.sources.GPX?.available,
+          LiDAR: data.sources.LiDAR?.available,
+          QSpatial: data.sources.QSpatial?.available,
+          Overall: data.sources.Overall?.available,
+        });
+
+        setElevationSources(data);
+        // Auto-select first available source if Overall not available
+        if (!data.sources.Overall?.available) {
+          if (data.sources.QSpatial?.available) {
+            setSelectedElevationSource("QSpatial");
+          } else if (data.sources.LiDAR?.available) {
+            setSelectedElevationSource("LiDAR");
+          } else if (data.sources.GPX?.available) {
+            setSelectedElevationSource("GPX");
+          }
+        }
+      } else {
+        console.error("❌ Elevation sources failed:", data.error);
+        setElevationSources({ error: data.error });
+      }
+    } catch (err) {
+      console.error("❌ Error loading elevation sources:", err);
+      setElevationSources({ error: err.message });
+    } finally {
+      setLoadingElevationSources(false);
+    }
+  };
 
   const loadDemData = async (trailId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/trail/${trailId}/dem-analysis`);
+      const response = await fetch(
+        `${API_BASE_URL}/trail/${trailId}/dem-analysis`
+      );
       const data = await response.json();
       if (data.success) {
         setDemData(data);
@@ -375,10 +435,12 @@ export default function Dashboard() {
 
   const load3DTerrain = async (trailId) => {
     if (!trailId) return;
-    
+
     setLoading3D(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/trail/${trailId}/3d-terrain`);
+      const response = await fetch(
+        `${API_BASE_URL}/trail/${trailId}/3d-terrain`
+      );
       const data = await response.json();
       if (data.success) {
         setTerrain3D(data);
@@ -392,8 +454,6 @@ export default function Dashboard() {
       setLoading3D(false);
     }
   };
-
-
 
   const loadDemCoverage = async () => {
     try {
@@ -556,6 +616,61 @@ export default function Dashboard() {
     }
   };
 
+  const handleLidarUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    if (file && file.name.endsWith(".las")) {
+      setIsUploadingLidar(true);
+      setLidarUploadSuccess(false);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        // Add trail_id if a trail is selected
+        if (selectedTrail?.id) {
+          formData.append("trail_id", selectedTrail.id);
+        }
+
+        const response = await fetch(`${API_BASE_URL}/upload-lidar`, {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          console.log("LiDAR file uploaded successfully:", data);
+          setLidarUploadSuccess(true);
+
+          // Reload elevation sources if a trail is selected
+          if (selectedTrail?.id) {
+            loadElevationSources(selectedTrail.id);
+          }
+
+          // Reset success message after 3 seconds
+          setTimeout(() => {
+            setLidarUploadSuccess(false);
+          }, 3000);
+        } else {
+          console.error("LiDAR upload failed:", data.error || data.detail);
+          alert(
+            `Upload failed: ${data.error || data.detail || "Unknown error"}`
+          );
+        }
+      } catch (error) {
+        console.error("LiDAR upload error:", error);
+        alert(`Upload error: ${error.message}`);
+      } finally {
+        setIsUploadingLidar(false);
+        // Reset file input
+        event.target.value = "";
+      }
+    } else if (file) {
+      alert("Please select a valid .las file");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -597,7 +712,9 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">MAPENU Trail Hub</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                MAPENU Trail Hub
+              </h1>
               <p className="text-gray-600">
                 Mapped Analysis Platform for Elevation and Navigation Utility
               </p>
@@ -642,6 +759,38 @@ export default function Dashboard() {
                     : isDuplicate
                     ? "Duplicate Trail!"
                     : "Upload GPX"}
+                </Button>
+              </div>
+
+              {/* LiDAR Upload Button */}
+              <div className="relative">
+                <input
+                  type="file"
+                  accept=".las"
+                  onChange={handleLidarUpload}
+                  id="lidar-upload"
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isUploadingLidar}
+                  className={`inline-flex items-center ${
+                    lidarUploadSuccess
+                      ? "bg-green-100 border-green-500 text-green-700"
+                      : ""
+                  }`}
+                  type="button"
+                  onClick={() => {
+                    document.getElementById("lidar-upload").click();
+                  }}
+                >
+                  <Database className="w-4 h-4 mr-2" />
+                  {isUploadingLidar
+                    ? "Uploading LiDAR..."
+                    : lidarUploadSuccess
+                    ? "LiDAR Uploaded ✓"
+                    : "Upload LiDAR"}
                 </Button>
               </div>
 
@@ -871,146 +1020,268 @@ export default function Dashboard() {
               </Card>
 
               {/* Elevation Profile */}
-              <Card className="lg:col-span-2 shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-3 text-xl">
-                    <div className="p-3 bg-green-100 rounded-xl">
-                      <Mountain className="w-6 h-6 text-green-600" />
+              <Card className="lg:col-span-2 shadow-lg border-0 bg-gradient-to-br from-white to-gray-50 overflow-visible">
+                <CardHeader className="pb-4 overflow-visible">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-3 text-xl">
+                      <div className="p-3 bg-green-100 rounded-xl">
+                        <Mountain className="w-6 h-6 text-green-600" />
+                      </div>
+                      Elevation Profile
+                    </CardTitle>
+                    {/* Data Source Selector */}
+                    {loadingElevationSources ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Loading data sources...
+                      </div>
+                    ) : elevationSources &&
+                      elevationSources.summary?.total_sources_available > 0 ? (
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-gray-600">
+                          Data Source:
+                        </span>
+                        <Select
+                          value={selectedElevationSource}
+                          onValueChange={setSelectedElevationSource}
+                        >
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select source" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {elevationSources.sources?.Overall?.available && (
+                              <SelectItem value="Overall">
+                                Overall (Average)
+                              </SelectItem>
+                            )}
+                            {elevationSources.sources?.GPX?.available && (
+                              <SelectItem value="GPX">GPX</SelectItem>
+                            )}
+                            {elevationSources.sources?.LiDAR?.available && (
+                              <SelectItem value="LiDAR">LiDAR</SelectItem>
+                            )}
+                            {elevationSources.sources?.QSpatial?.available && (
+                              <SelectItem value="QSpatial">
+                                QSpatial DEM
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : elevationSources ? (
+                      <div className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-md">
+                        ⚠️ No elevation data sources available for this trail
+                      </div>
+                    ) : null}
+                  </div>
+                  {/* Source Info Badge */}
+                  {elevationSources?.sources?.[selectedElevationSource] && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      {elevationSources.sources[selectedElevationSource].source}
+                      {elevationSources.sources[selectedElevationSource]
+                        .coverage_percent && (
+                        <span className="ml-2">
+                          • Coverage:{" "}
+                          {elevationSources.sources[
+                            selectedElevationSource
+                          ].coverage_percent.toFixed(1)}
+                          %
+                        </span>
+                      )}
                     </div>
-                    Elevation Profile
-                  </CardTitle>
+                  )}
+                  {/* Debug: Show availability status */}
+                  {elevationSources && elevationSources.summary && (
+                    <div className="mt-2 text-xs text-gray-400 flex gap-2">
+                      <span>Available:</span>
+                      {elevationSources.summary.gpx_available && (
+                        <span className="text-green-600">✓ GPX</span>
+                      )}
+                      {elevationSources.summary.lidar_available && (
+                        <span className="text-green-600">✓ LiDAR</span>
+                      )}
+                      {elevationSources.summary.qspatial_available && (
+                        <span className="text-green-600">✓ QSpatial</span>
+                      )}
+                      {elevationSources.summary.total_sources_available ===
+                        0 && (
+                        <span className="text-red-600">None available</span>
+                      )}
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
-                    <div className="h-80">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={selectedTrail?.elevation_profile}>
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#f1f5f9"
-                          />
-                          <XAxis
-                            dataKey="distance"
-                            label={{
-                              value: "Distance (km)",
-                              position: "insideBottom",
-                              offset: -5,
-                            }}
-                            stroke="#64748b"
-                            fontSize={12}
-                          />
-                          <YAxis
-                            yAxisId="left"
-                            label={{
-                              value: "Elevation (m)",
-                              angle: -90,
-                              position: "insideLeft",
-                            }}
-                            stroke="#64748b"
-                            fontSize={12}
-                          />
-                          <YAxis
-                            yAxisId="right"
-                            orientation="right"
-                            label={{
-                              value: "Slope (%)",
-                              angle: 90,
-                              position: "insideRight",
-                            }}
-                            stroke="#f59e0b"
-                            fontSize={12}
-                          />
-                          <Tooltip
-                            formatter={(value, name) => [
-                              `${value}${
-                                name === "elevation"
-                                  ? "m"
-                                  : name === "slope"
-                                  ? "%"
-                                  : ""
-                              }`,
-                              name === "elevation"
-                                ? "Elevation"
-                                : name === "slope"
-                                ? "Slope"
-                                : name,
-                            ]}
-                            labelFormatter={(label) => `Distance: ${label}km`}
-                            contentStyle={{
-                              backgroundColor: "#1f2937",
-                              color: "#f9fafb",
-                              border: "none",
-                              borderRadius: "12px",
-                              boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
-                            }}
-                          />
-                          <Area
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="elevation"
-                            stroke="#3b82f6"
-                            fill="url(#elevationGradient)"
-                            strokeWidth={3}
-                          />
-                          <Line
-                            yAxisId="right"
-                            type="monotone"
-                            dataKey="slope"
-                            stroke="#f59e0b"
-                            strokeWidth={2}
-                            dot={false}
-                            name="Slope"
-                          />
-                          <defs>
-                            <linearGradient
-                              id="elevationGradient"
-                              x1="0"
-                              y1="0"
-                              x2="0"
-                              y2="1"
-                            >
-                              <stop
-                                offset="5%"
-                                stopColor="#3b82f6"
-                                stopOpacity={0.4}
-                              />
-                              <stop
-                                offset="95%"
-                                stopColor="#3b82f6"
-                                stopOpacity={0.1}
-                              />
-                            </linearGradient>
-                          </defs>
-                          {/* Min/Max elevation reference lines */}
-                          {selectedTrail?.max_elevation && (
-                            <Line
-                              yAxisId="left"
-                              type="step"
-                              dataKey={() => selectedTrail.max_elevation}
-                              stroke="#ef4444"
-                              strokeDasharray="8 4"
-                              strokeWidth={2}
-                              dot={false}
-                              name="Max Elevation"
-                            />
-                          )}
-                          {selectedTrail?.min_elevation && (
-                            <Line
-                              yAxisId="left"
-                              type="step"
-                              dataKey={() => selectedTrail.min_elevation}
-                              stroke="#22c55e"
-                              strokeDasharray="8 4"
-                              strokeWidth={2}
-                              dot={false}
-                              name="Min Elevation"
-                            />
-                          )}
-                        </AreaChart>
-                      </ResponsiveContainer>
+                  {loadingElevationSources ? (
+                    <div className="flex items-center justify-center h-80">
+                      <div className="text-center">
+                        <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500" />
+                        <p className="text-gray-600">
+                          Loading elevation data...
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  {/* Elevation Stats */}
+                  ) : (
+                    <>
+                      <div className="bg-white rounded-xl p-4 shadow-sm mb-6">
+                        <div className="h-80">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart
+                              data={(() => {
+                                // Prepare chart data from selected source
+                                const sourceData =
+                                  elevationSources?.sources?.[
+                                    selectedElevationSource
+                                  ];
+                                if (!sourceData?.available) {
+                                  return selectedTrail?.elevation_profile || [];
+                                }
+
+                                // Convert to chart format
+                                return sourceData.elevations.map(
+                                  (elev, idx) => ({
+                                    distance:
+                                      sourceData.distances[idx]?.toFixed(2) ||
+                                      0,
+                                    elevation: parseFloat(elev.toFixed(2)),
+                                    slope:
+                                      sourceData.slopes?.[idx]?.toFixed(2) || 0,
+                                  })
+                                );
+                              })()}
+                            >
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="#f1f5f9"
+                              />
+                              <XAxis
+                                dataKey="distance"
+                                label={{
+                                  value: "Distance (km)",
+                                  position: "insideBottom",
+                                  offset: -5,
+                                }}
+                                stroke="#64748b"
+                                fontSize={12}
+                              />
+                              <YAxis
+                                yAxisId="left"
+                                label={{
+                                  value: "Elevation (m)",
+                                  angle: -90,
+                                  position: "insideLeft",
+                                }}
+                                stroke="#64748b"
+                                fontSize={12}
+                              />
+                              <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                label={{
+                                  value: "Slope (%)",
+                                  angle: 90,
+                                  position: "insideRight",
+                                }}
+                                stroke="#f59e0b"
+                                fontSize={12}
+                              />
+                              <Tooltip
+                                formatter={(value, name) => [
+                                  `${value}${
+                                    name === "elevation"
+                                      ? "m"
+                                      : name === "slope"
+                                      ? "%"
+                                      : ""
+                                  }`,
+                                  name === "elevation"
+                                    ? "Elevation"
+                                    : name === "slope"
+                                    ? "Slope"
+                                    : name,
+                                ]}
+                                labelFormatter={(label) =>
+                                  `Distance: ${label}km`
+                                }
+                                contentStyle={{
+                                  backgroundColor: "#1f2937",
+                                  color: "#f9fafb",
+                                  border: "none",
+                                  borderRadius: "12px",
+                                  boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                                }}
+                              />
+                              <Area
+                                yAxisId="left"
+                                type="monotone"
+                                dataKey="elevation"
+                                stroke="#3b82f6"
+                                fill="url(#elevationGradient)"
+                                strokeWidth={3}
+                              />
+                              <Line
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="slope"
+                                stroke="#f59e0b"
+                                strokeWidth={2}
+                                strokeDasharray="5 5"
+                                dot={false}
+                                name="Slope"
+                              />
+                              <defs>
+                                <linearGradient
+                                  id="elevationGradient"
+                                  x1="0"
+                                  y1="0"
+                                  x2="0"
+                                  y2="1"
+                                >
+                                  <stop
+                                    offset="5%"
+                                    stopColor="#3b82f6"
+                                    stopOpacity={0.4}
+                                  />
+                                  <stop
+                                    offset="95%"
+                                    stopColor="#3b82f6"
+                                    stopOpacity={0.1}
+                                  />
+                                </linearGradient>
+                              </defs>
+                              {/* Min/Max elevation reference lines */}
+                              {selectedTrail?.max_elevation && (
+                                <Line
+                                  yAxisId="left"
+                                  type="step"
+                                  dataKey={() => selectedTrail.max_elevation}
+                                  stroke="#ef4444"
+                                  strokeDasharray="8 4"
+                                  strokeWidth={2}
+                                  dot={false}
+                                  name="Max Elevation"
+                                />
+                              )}
+                              {selectedTrail?.min_elevation && (
+                                <Line
+                                  yAxisId="left"
+                                  type="step"
+                                  dataKey={() => selectedTrail.min_elevation}
+                                  stroke="#22c55e"
+                                  strokeDasharray="8 4"
+                                  strokeWidth={2}
+                                  dot={false}
+                                  name="Min Elevation"
+                                />
+                              )}
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                      {/* Elevation Stats */}
+                    </>
+                  )}
+
+                  <div className="mt-4"></div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <StatCard
                       icon={TrendingUp}
@@ -1240,207 +1511,273 @@ export default function Dashboard() {
               </Card>
             )}
 
-              {/* Enhanced DEM/LiDAR Analysis Section */}
-              {selectedTrail && (
-                <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-3 text-xl">
-                      <div className="p-3 bg-indigo-100 rounded-xl">
-                        <Mountain className="w-6 h-6 text-indigo-600" />
+            {/* Enhanced DEM/LiDAR Analysis Section */}
+            {selectedTrail && (
+              <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
+                <CardHeader className="pb-4">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <div className="p-3 bg-indigo-100 rounded-xl">
+                      <Mountain className="w-6 h-6 text-indigo-600" />
+                    </div>
+                    High-Resolution Terrain Data
+                    <span className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                      DEM + LiDAR
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Mountain className="w-6 h-6 text-green-600" />
+                      <h4 className="font-semibold text-gray-800 text-lg">
+                        Real-Time DEM Analysis
+                      </h4>
+                      {selectedTrail?.id && (
+                        <button
+                          onClick={() => loadDemData(selectedTrail.id)}
+                          className="ml-auto p-1 hover:bg-green-200 rounded text-green-600"
+                          title="Refresh DEM analysis"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    {demData?.error ? (
+                      <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-4">
+                        <p className="text-yellow-800 font-semibold">
+                          ⚠️ DEM Analysis Unavailable
+                        </p>
+                        <p className="text-yellow-700 text-sm mt-1">
+                          {demData.error}
+                        </p>
+                        <p className="text-yellow-600 text-xs mt-2">
+                          Ensure your 6GB DEM files are properly located and
+                          rasterio is installed.
+                        </p>
                       </div>
-                      High-Resolution Terrain Data
-                      <span className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                        DEM + LiDAR
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Mountain className="w-6 h-6 text-green-600" />
-                        <h4 className="font-semibold text-gray-800 text-lg">Real-Time DEM Analysis</h4>
-                        {selectedTrail?.id && (
-                          <button
-                            onClick={() => loadDemData(selectedTrail.id)}
-                            className="ml-auto p-1 hover:bg-green-200 rounded text-green-600"
-                            title="Refresh DEM analysis"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      
-                      {demData?.error ? (
-                        <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-4">
-                          <p className="text-yellow-800 font-semibold">⚠️ DEM Analysis Unavailable</p>
-                          <p className="text-yellow-700 text-sm mt-1">{demData.error}</p>
-                          <p className="text-yellow-600 text-xs mt-2">
-                            Ensure your 6GB DEM files are properly located and rasterio is installed.
-                          </p>
-                        </div>
-                      ) : demData?.success ? (
-                        <div className="space-y-4">
-                          {/* Elevation Profile Analysis */}
-                          {demData.elevation_analysis?.elevation_profile && (
-                            <div className="bg-white rounded-lg p-4">
-                              <h5 className="font-semibold text-gray-800 mb-3">High-Resolution Elevation Profile</h5>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                <div>
-                                  <span className="text-gray-600">Sample Points:</span>
-                                  <span className="font-bold text-blue-600 ml-2">
-                                    {demData.elevation_analysis.elevation_profile.elevations.length}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">Resolution:</span>
-                                  <span className="font-bold text-green-600 ml-2">
-                                    {demData.elevation_analysis.sample_interval}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">Max Elevation:</span>
-                                  <span className="font-bold text-purple-600 ml-2">
-                                    {demData.elevation_analysis.statistics.max_elevation.toFixed(1)}m
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">Min Elevation:</span>
-                                  <span className="font-bold text-indigo-600 ml-2">
-                                    {demData.elevation_analysis.statistics.min_elevation.toFixed(1)}m
-                                  </span>
-                                </div>
+                    ) : demData?.success ? (
+                      <div className="space-y-4">
+                        {/* Elevation Profile Analysis */}
+                        {demData.elevation_analysis?.elevation_profile && (
+                          <div className="bg-white rounded-lg p-4">
+                            <h5 className="font-semibold text-gray-800 mb-3">
+                              High-Resolution Elevation Profile
+                            </h5>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-600">
+                                  Sample Points:
+                                </span>
+                                <span className="font-bold text-blue-600 ml-2">
+                                  {
+                                    demData.elevation_analysis.elevation_profile
+                                      .elevations.length
+                                  }
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">
+                                  Resolution:
+                                </span>
+                                <span className="font-bold text-green-600 ml-2">
+                                  {demData.elevation_analysis.sample_interval}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">
+                                  Max Elevation:
+                                </span>
+                                <span className="font-bold text-purple-600 ml-2">
+                                  {demData.elevation_analysis.statistics.max_elevation.toFixed(
+                                    1
+                                  )}
+                                  m
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">
+                                  Min Elevation:
+                                </span>
+                                <span className="font-bold text-indigo-600 ml-2">
+                                  {demData.elevation_analysis.statistics.min_elevation.toFixed(
+                                    1
+                                  )}
+                                  m
+                                </span>
                               </div>
                             </div>
-                          )}
+                          </div>
+                        )}
 
-                          {/* Terrain Features */}
-                          {demData.terrain_features?.success && (
-                            <div className="bg-white rounded-lg p-4">
-                              <h5 className="font-semibold text-gray-800 mb-3">Identified Terrain Features</h5>
-                              {demData.terrain_features.features.length > 0 ? (
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                  {demData.terrain_features.features.slice(0, 10).map((feature, idx) => (
-                                    <div key={idx} className="flex items-center justify-between text-sm border-b border-gray-100 pb-1">
+                        {/* Terrain Features */}
+                        {demData.terrain_features?.success && (
+                          <div className="bg-white rounded-lg p-4">
+                            <h5 className="font-semibold text-gray-800 mb-3">
+                              Identified Terrain Features
+                            </h5>
+                            {demData.terrain_features.features.length > 0 ? (
+                              <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {demData.terrain_features.features
+                                  .slice(0, 10)
+                                  .map((feature, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="flex items-center justify-between text-sm border-b border-gray-100 pb-1"
+                                    >
                                       <span className="font-medium text-gray-700">
                                         {feature.type}
                                       </span>
                                       <span className="text-gray-600">
-                                        {feature.elevation ? `${feature.elevation.toFixed(1)}m` : 
-                                         feature.slope ? `${feature.slope.toFixed(1)}%` : ''}
+                                        {feature.elevation
+                                          ? `${feature.elevation.toFixed(1)}m`
+                                          : feature.slope
+                                          ? `${feature.slope.toFixed(1)}%`
+                                          : ""}
                                       </span>
                                       <span className="text-xs text-gray-500">
-                                        {feature.distance ? `${feature.distance.toFixed(0)}m` : ''}
+                                        {feature.distance
+                                          ? `${feature.distance.toFixed(0)}m`
+                                          : ""}
                                       </span>
                                     </div>
                                   ))}
-                                  {demData.terrain_features.features.length > 10 && (
-                                    <p className="text-xs text-gray-500 text-center">
-                                      +{demData.terrain_features.features.length - 10} more features
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500 text-sm">No significant terrain features detected</p>
-                              )}
-                              
-                              <div className="mt-3 pt-3 border-t border-gray-200">
-                                <div className="grid grid-cols-3 gap-2 text-xs">
-                                  <div className="text-center">
-                                    <div className="text-lg font-bold text-blue-600">
-                                      {demData.terrain_features.summary?.peaks || 0}
-                                    </div>
-                                    <div className="text-gray-600">Peaks</div>
-                                  </div>
-                                  <div className="text-center">
-                                    <div className="text-lg font-bold text-green-600">
-                                      {demData.terrain_features.summary?.valleys || 0}
-                                    </div>
-                                    <div className="text-gray-600">Valleys</div>
-                                  </div>
-                                  <div className="text-center">
-                                    <div className="text-lg font-bold text-red-600">
-                                      {demData.terrain_features.summary?.steep_sections || 0}
-                                    </div>
-                                    <div className="text-gray-600">Steep Grades</div>
-                                  </div>
-                                </div>
+                                {demData.terrain_features.features.length >
+                                  10 && (
+                                  <p className="text-xs text-gray-500 text-center">
+                                    +
+                                    {demData.terrain_features.features.length -
+                                      10}{" "}
+                                    more features
+                                  </p>
+                                )}
                               </div>
-                            </div>
-                          )}
+                            ) : (
+                              <p className="text-gray-500 text-sm">
+                                No significant terrain features detected
+                              </p>
+                            )}
 
-                          {/* 3D Terrain Visualization */}
-                          <div className="bg-white rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <h5 className="font-semibold text-gray-800">3D Terrain Visualization</h5>
-                              {loading3D && (
-                                <div className="flex items-center text-blue-600 text-xs">
-                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
-                                  Generating...
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <div className="grid grid-cols-3 gap-2 text-xs">
+                                <div className="text-center">
+                                  <div className="text-lg font-bold text-blue-600">
+                                    {demData.terrain_features.summary?.peaks ||
+                                      0}
+                                  </div>
+                                  <div className="text-gray-600">Peaks</div>
                                 </div>
-                              )}
-                            </div>
-                            
-                            {terrain3D?.visualization_type === 'interactive' && terrain3D?.visualization_html ? (
-                              <div className="text-center">
-                                <div className="w-full h-150 rounded-lg border shadow-lg overflow-hidden">
-                                  <iframe
-                                    src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
-                                    className="w-full h-full border-0"
-                                    title="Interactive 3D Terrain Visualization"
-                                    sandbox="allow-scripts allow-same-origin"
-                                    loading="lazy"
-                                  />
+                                <div className="text-center">
+                                  <div className="text-lg font-bold text-green-600">
+                                    {demData.terrain_features.summary
+                                      ?.valleys || 0}
+                                  </div>
+                                  <div className="text-gray-600">Valleys</div>
                                 </div>
-                                <p className="text-xs text-gray-600 mt-2">
-                                  🎮 Interactive 3D terrain - Click and drag to rotate, scroll to zoom
-                                </p>
+                                <div className="text-center">
+                                  <div className="text-lg font-bold text-red-600">
+                                    {demData.terrain_features.summary
+                                      ?.steep_sections || 0}
+                                  </div>
+                                  <div className="text-gray-600">
+                                    Steep Grades
+                                  </div>
+                                </div>
                               </div>
-                            ) : terrain3D?.visualization ? (
-                              <div className="text-center">
-                                <img 
-                                  src={terrain3D.visualization} 
-                                  alt="3D Terrain Visualization"
-                                  className="max-w-full h-auto rounded-lg border"
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 3D Terrain Visualization */}
+                        <div className="bg-white rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="font-semibold text-gray-800">
+                              3D Terrain Visualization
+                            </h5>
+                            {loading3D && (
+                              <div className="flex items-center text-blue-600 text-xs">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                                Generating...
+                              </div>
+                            )}
+                          </div>
+
+                          {terrain3D?.visualization_type === "interactive" &&
+                          terrain3D?.visualization_html ? (
+                            <div className="text-center">
+                              <div className="w-full h-150 rounded-lg border shadow-lg overflow-hidden">
+                                <iframe
+                                  src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
+                                  className="w-full h-full border-0"
+                                  title="Interactive 3D Terrain Visualization"
+                                  sandbox="allow-scripts allow-same-origin"
+                                  loading="lazy"
                                 />
-                                <p className="text-xs text-gray-600 mt-2">
-                                  3D terrain model showing trail path over DEM data
-                                </p>
                               </div>
-                            ) : terrain3D?.error ? (
-                              <div className="text-center py-4">
-                                <p className="text-red-600 text-sm">{terrain3D.error}</p>
-                              </div>
-                            ) : !terrain3D ? (
-                              <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                                <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                                <p>3D terrain visualization will appear here</p>
-                                <p className="text-xs mt-1">Shows trail path over real DEM elevation data</p>
-                              </div>
-                            ) : null}
-                          </div>
+                              <p className="text-xs text-gray-600 mt-2">
+                                🎮 Interactive 3D terrain - Click and drag to
+                                rotate, scroll to zoom
+                              </p>
+                            </div>
+                          ) : terrain3D?.visualization ? (
+                            <div className="text-center">
+                              <img
+                                src={terrain3D.visualization}
+                                alt="3D Terrain Visualization"
+                                className="max-w-full h-auto rounded-lg border"
+                              />
+                              <p className="text-xs text-gray-600 mt-2">
+                                3D terrain model showing trail path over DEM
+                                data
+                              </p>
+                            </div>
+                          ) : terrain3D?.error ? (
+                            <div className="text-center py-4">
+                              <p className="text-red-600 text-sm">
+                                {terrain3D.error}
+                              </p>
+                            </div>
+                          ) : !terrain3D ? (
+                            <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                              <Mountain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                              <p>3D terrain visualization will appear here</p>
+                              <p className="text-xs mt-1">
+                                Shows trail path over real DEM elevation data
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
 
-                          {/* Data Quality Info */}
-                          <div className="bg-gradient-to-r from-blue-100 to-green-100 rounded-lg p-3">
-                            <p className="text-sm text-gray-700">
-                              <strong>Data Sources:</strong> {demData.elevation_analysis?.data_sources?.length || 0} DEM tiles • 
-                              <strong> Resolution:</strong> {demData.data_quality?.resolution} • 
-                              <strong> Accuracy:</strong> {demData.data_quality?.accuracy}
-                            </p>
-                          </div>
+                        {/* Data Quality Info */}
+                        <div className="bg-gradient-to-r from-blue-100 to-green-100 rounded-lg p-3">
+                          <p className="text-sm text-gray-700">
+                            <strong>Data Sources:</strong>{" "}
+                            {demData.elevation_analysis?.data_sources?.length ||
+                              0}{" "}
+                            DEM tiles •<strong> Resolution:</strong>{" "}
+                            {demData.data_quality?.resolution} •
+                            <strong> Accuracy:</strong>{" "}
+                            {demData.data_quality?.accuracy}
+                          </p>
                         </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <div className="animate-pulse">
-                            <Database className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <p className="text-gray-500">Analyzing 6GB of high-resolution DEM data...</p>
-                            <p className="text-gray-400 text-xs mt-2">Processing Brisbane Government elevation tiles</p>
-                          </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="animate-pulse">
+                          <Database className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                          <p className="text-gray-500">
+                            Analyzing 6GB of high-resolution DEM data...
+                          </p>
+                          <p className="text-gray-400 text-xs mt-2">
+                            Processing Brisbane Government elevation tiles
+                          </p>
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </>
         ) : (
           <Card className="shadow-lg border-0 bg-gradient-to-br from-gray-50 to-white">
