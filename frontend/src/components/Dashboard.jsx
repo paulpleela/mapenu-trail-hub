@@ -343,6 +343,9 @@ export default function Dashboard() {
   // LiDAR upload
   const [isUploadingLidar, setIsUploadingLidar] = useState(false);
   const [lidarUploadSuccess, setLidarUploadSuccess] = useState(false);
+  const [showLidarTrailSelector, setShowLidarTrailSelector] = useState(false);
+  const [pendingLidarFile, setPendingLidarFile] = useState(null);
+  const [selectedLidarTrailId, setSelectedLidarTrailId] = useState(null);
 
   const loadElevationSources = async (trailId) => {
     setLoadingElevationSources(true);
@@ -584,59 +587,76 @@ export default function Dashboard() {
     }
   };
 
-  const handleLidarUpload = async (event) => {
+  // Step 1: User selects file → Show trail selector dialog
+  const handleLidarFileSelect = (event) => {
     const file = event.target.files?.[0];
 
     if (file && (file.name.endsWith(".las") || file.name.endsWith(".laz"))) {
-      setIsUploadingLidar(true);
-      setLidarUploadSuccess(false);
-
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-
-        // Add trail_id if a trail is selected
-        if (selectedTrail?.id) {
-          formData.append("trail_id", selectedTrail.id);
-        }
-
-        const response = await fetch(`${API_BASE_URL}/upload-lidar`, {
-          method: "POST",
-          body: formData,
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
-          console.log("LiDAR file uploaded successfully:", data);
-          setLidarUploadSuccess(true);
-
-          // Reload elevation sources if a trail is selected
-          if (selectedTrail?.id) {
-            loadElevationSources(selectedTrail.id);
-          }
-
-          // Reset success message after 3 seconds
-          setTimeout(() => {
-            setLidarUploadSuccess(false);
-          }, 3000);
-        } else {
-          console.error("LiDAR upload failed:", data.error || data.detail);
-          alert(
-            `Upload failed: ${data.error || data.detail || "Unknown error"}`
-          );
-        }
-      } catch (error) {
-        console.error("LiDAR upload error:", error);
-        alert(`Upload error: ${error.message}`);
-      } finally {
-        setIsUploadingLidar(false);
-        // Reset file input
-        event.target.value = "";
-      }
+      setPendingLidarFile(file);
+      setShowLidarTrailSelector(true);
+      // Reset file input
+      event.target.value = "";
     } else if (file) {
       alert("Please select a valid .las or .laz file");
+      event.target.value = "";
     }
+  };
+
+  // Step 2: User selects trail → Upload file
+  const handleLidarUploadWithTrail = async () => {
+    if (!pendingLidarFile || !selectedLidarTrailId) {
+      alert("Please select a trail first");
+      return;
+    }
+
+    setIsUploadingLidar(true);
+    setLidarUploadSuccess(false);
+    setShowLidarTrailSelector(false);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", pendingLidarFile);
+      formData.append("trail_id", selectedLidarTrailId);
+
+      const response = await fetch(`${API_BASE_URL}/upload-lidar`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        console.log("LiDAR file uploaded successfully:", data);
+        setLidarUploadSuccess(true);
+
+        // Reload elevation sources if viewing the same trail
+        if (selectedTrail?.id === selectedLidarTrailId) {
+          loadElevationSources(selectedTrail.id);
+        }
+
+        // Reset success message after 3 seconds
+        setTimeout(() => {
+          setLidarUploadSuccess(false);
+        }, 3000);
+      } else {
+        console.error("LiDAR upload failed:", data.error || data.detail);
+        alert(`Upload failed: ${data.error || data.detail || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("LiDAR upload error:", error);
+      alert(`Upload error: ${error.message}`);
+    } finally {
+      setIsUploadingLidar(false);
+      setPendingLidarFile(null);
+      setSelectedLidarTrailId(null);
+    }
+  };
+
+  // Cancel upload
+  const handleCancelLidarUpload = () => {
+    setShowLidarTrailSelector(false);
+    setPendingLidarFile(null);
+    setSelectedLidarTrailId(null);
   };
 
   if (isLoading) {
@@ -735,7 +755,7 @@ export default function Dashboard() {
                 <input
                   type="file"
                   accept=".las,.laz"
-                  onChange={handleLidarUpload}
+                  onChange={handleLidarFileSelect}
                   id="lidar-upload"
                   className="hidden"
                 />
@@ -1806,6 +1826,79 @@ export default function Dashboard() {
 
       {/* Info/Help Page Modal */}
       {showInfoPage && <InfoPage onClose={() => setShowInfoPage(false)} />}
+
+      {/* LiDAR Trail Selection Dialog */}
+      {showLidarTrailSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                Select Trail for LiDAR File
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Choose which trail this LiDAR file belongs to:
+              </p>
+              <p className="text-sm font-medium text-gray-700 mb-4">
+                📁 File: {pendingLidarFile?.name}
+              </p>
+
+              {/* Trail Selector */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Trail
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedLidarTrailId || ""}
+                    onChange={(e) =>
+                      setSelectedLidarTrailId(
+                        e.target.value ? parseInt(e.target.value) : null
+                      )
+                    }
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Select a trail...</option>
+                    {trails.map((trail) => (
+                      <option key={trail.id} value={trail.id}>
+                        {trail.name} ({trail.distance_km?.toFixed(2)} km,{" "}
+                        {trail.elevation_gain?.toFixed(0)}m gain)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleCancelLidarUpload}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleLidarUploadWithTrail}
+                  disabled={!selectedLidarTrailId || isUploadingLidar}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  {isUploadingLidar ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

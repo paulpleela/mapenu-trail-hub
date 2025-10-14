@@ -162,20 +162,34 @@ class LiDARExtractor:
         return converted
 
     def find_matching_lidar_file(
-        self, trail_coords: List[List[float]], trail_name: str = None
+        self,
+        trail_coords: List[List[float]],
+        trail_name: str = None,
+        trail_id: int = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Find LiDAR file that best matches the trail coordinates
+        Prioritizes trail_id associations for manually uploaded files
 
         Args:
             trail_coords: List of [lat, lon] coordinates from trail
             trail_name: Optional trail name to help with matching
+            trail_id: Optional trail ID to match against database associations
 
         Returns:
             Dictionary with LiDAR file metadata or None
         """
         if not self.lidar_files:
             return None
+
+        # FIRST: Check for direct trail_id association (for manually uploaded files)
+        if trail_id is not None:
+            for lidar_record in self.lidar_files:
+                if lidar_record.get("trail_id") == trail_id:
+                    print(
+                        f"✅ Found LiDAR file associated with trail_id={trail_id}: {lidar_record.get('filename')}"
+                    )
+                    return lidar_record
 
         # Convert trail coords to MGA56
         mga_coords = self._coords_to_mga56(trail_coords)
@@ -276,6 +290,7 @@ class LiDARExtractor:
         trail_coords: List[List[float]],
         lidar_record: Dict[str, Any] = None,
         search_radius: float = 2.0,
+        trail_id: int = None,
     ) -> Dict[str, Any]:
         """
         Extract elevation profile from LiDAR data along trail path
@@ -284,13 +299,16 @@ class LiDARExtractor:
             trail_coords: List of [lat, lon] coordinates
             lidar_record: Dictionary with LiDAR file metadata (or auto-detect)
             search_radius: Radius in meters to search for LiDAR points near each trail point
+            trail_id: Optional trail ID to match against database associations
 
         Returns:
             Dictionary with elevation profile data
         """
         # Auto-detect LiDAR file if not provided
         if lidar_record is None:
-            lidar_record = self.find_matching_lidar_file(trail_coords)
+            lidar_record = self.find_matching_lidar_file(
+                trail_coords, trail_id=trail_id
+            )
             if lidar_record is None:
                 return {
                     "success": False,

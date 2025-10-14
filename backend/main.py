@@ -1,7 +1,8 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from typing import Optional
 import gpxpy
 import folium
 from folium.plugins import Fullscreen, MeasureControl
@@ -2046,7 +2047,9 @@ async def get_trail_elevation_sources(trail_id: int):
             try:
                 print(f"🔍 Searching for matching LiDAR file...")
                 print(f"   Available LiDAR files: {len(lidar_extractor.lidar_files)}")
-                lidar_result = lidar_extractor.extract_elevation_profile(coordinates)
+                lidar_result = lidar_extractor.extract_elevation_profile(
+                    coordinates, trail_id=trail_id
+                )
                 print(
                     f"   LiDAR extraction result: success={lidar_result.get('success')}, error={lidar_result.get('error')}"
                 )
@@ -2236,7 +2239,9 @@ async def get_trail_elevation_sources(trail_id: int):
 
 
 @app.post("/upload-lidar")
-async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
+async def upload_lidar_file(
+    file: UploadFile = File(...), trail_id: Optional[int] = Form(None)
+):
     """
     Upload a LiDAR .las/.laz file to Supabase Storage and store metadata in the database
     Checks for duplicates before uploading
@@ -2247,6 +2252,7 @@ async def upload_lidar_file(file: UploadFile = File(...), trail_id: int = None):
     """
     temp_path = None
     try:
+        print(f"📤 Uploading LiDAR file with trail_id: {trail_id}")
         # Validate file extension
         if not (file.filename.endswith(".las") or file.filename.endswith(".laz")):
             raise HTTPException(
