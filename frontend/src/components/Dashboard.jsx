@@ -347,6 +347,21 @@ export default function Dashboard() {
   const [pendingLidarFile, setPendingLidarFile] = useState(null);
   const [selectedLidarTrailId, setSelectedLidarTrailId] = useState(null);
 
+  // GPX overwrite dialog state
+  const [showGpxOverwriteDialog, setShowGpxOverwriteDialog] = useState(false);
+  const [pendingGpxFile, setPendingGpxFile] = useState(null);
+  const [gpxDuplicateError, setGpxDuplicateError] = useState(null);
+
+  // LiDAR overwrite dialog state
+  const [showLidarOverwriteDialog, setShowLidarOverwriteDialog] =
+    useState(false);
+  const [lidarDuplicateError, setLidarDuplicateError] = useState(null);
+
+  // File size warning dialog state
+  const [showLidarFileSizeWarning, setShowLidarFileSizeWarning] =
+    useState(false);
+  const [lidarFileSizeInfo, setLidarFileSizeInfo] = useState(null);
+
   const loadElevationSources = async (trailId) => {
     setLoadingElevationSources(true);
     console.log("🔍 Loading elevation sources for trail:", trailId);
@@ -521,9 +536,9 @@ export default function Dashboard() {
     }
   };
 
-  const handleGPXImport = async (event) => {
-    const file = event.target.files[0];
-    console.log("File selected:", file);
+  const handleGPXImport = async (event, overwrite = false) => {
+    const file = overwrite ? pendingGpxFile : event?.target?.files?.[0];
+    console.log("File selected:", file, "Overwrite:", overwrite);
 
     if (file && file.name.endsWith(".gpx")) {
       console.log("Valid GPX file, starting upload...");
@@ -533,18 +548,27 @@ export default function Dashboard() {
       try {
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("overwrite", overwrite ? "true" : "false");
 
+        console.log("📤 GPX Upload - File:", file.name);
+        console.log("📤 GPX Upload - Overwrite:", overwrite ? "true" : "false");
         console.log("Sending upload request...");
+
         const response = await fetch(`${API_BASE_URL}/upload-gpx`, {
           method: "POST",
           body: formData,
         });
 
+        console.log("Response status:", response.status);
         const data = await response.json();
-        console.log("Upload response:", data);
+        console.log("Response data:", data);
 
         if (response.ok && data.success) {
           console.log(`Trail "${data.trail.name}" uploaded successfully!`);
+
+          // Clear pending file if overwrite was used
+          setPendingGpxFile(null);
+          setGpxDuplicateError(null);
 
           // Cool loading effect - show processing state
           setIsImporting(false);
@@ -561,30 +585,37 @@ export default function Dashboard() {
           let errorMessage = data.detail || data.error || "Upload failed";
 
           if (response.status === 409) {
-            // Duplicate trail error
+            // Duplicate trail error - show overwrite dialog
             console.warn("Duplicate trail detected:", errorMessage);
             setIsImporting(false);
-            setIsDuplicate(true);
-
-            // Show duplicate feedback briefly
-            setTimeout(() => {
-              setIsDuplicate(false);
-            }, 2000); // Show for 2 seconds
+            setGpxDuplicateError(errorMessage);
+            setPendingGpxFile(file);
+            setShowGpxOverwriteDialog(true);
           } else {
             console.error("Error processing GPX file:", errorMessage);
             setIsImporting(false);
+            alert(`Upload failed: ${errorMessage}`);
           }
         }
       } catch (error) {
         console.error("Upload error:", error);
         setIsImporting(false);
+        alert(`Upload error: ${error.message}`);
       } finally {
         // Reset file input
-        event.target.value = "";
+        if (event?.target) {
+          event.target.value = "";
+        }
       }
     } else if (file) {
       console.warn("Please select a valid GPX file");
     }
+  };
+
+  // Handle GPX overwrite confirmation
+  const handleGpxOverwriteConfirm = async () => {
+    setShowGpxOverwriteDialog(false);
+    await handleGPXImport(null, true);
   };
 
   // Step 1: User selects file → Show trail selector dialog
@@ -603,9 +634,24 @@ export default function Dashboard() {
   };
 
   // Step 2: User selects trail → Upload file
-  const handleLidarUploadWithTrail = async () => {
+  const handleLidarUploadWithTrail = async (overwrite = false) => {
     if (!pendingLidarFile || !selectedLidarTrailId) {
       alert("Please select a trail first");
+      return;
+    }
+
+    // Check file size (>= 1GB) - 1GB = 1073741824 bytes
+    const fileSizeMB = pendingLidarFile.size / (1024 * 1024);
+    if (fileSizeMB >= 1024) {
+      const fileSizeGB = (fileSizeMB / 1024).toFixed(2);
+      setLidarFileSizeInfo({
+        filename: pendingLidarFile.name,
+        sizeMB: fileSizeMB.toFixed(0),
+        sizeGB: fileSizeGB,
+        trailId: selectedLidarTrailId,
+      });
+      setShowLidarFileSizeWarning(true);
+      setShowLidarTrailSelector(false);
       return;
     }
 
@@ -617,39 +663,107 @@ export default function Dashboard() {
       const formData = new FormData();
       formData.append("file", pendingLidarFile);
       formData.append("trail_id", selectedLidarTrailId);
+      formData.append("overwrite", overwrite ? "true" : "false");
 
       const response = await fetch(`${API_BASE_URL}/upload-lidar`, {
         method: "POST",
         body: formData,
       });
 
-      const data = await response.json();
+      console.log("Response status:", response.status);
+
+      let data;
+      try {
+        data = await response.json();
+        console.log("Response data:", data);
+      } catch (parseError) {
+        console.error("Failed to parse JSON response:", parseError);
+        throw new Error("Invalid response from server");
+      }
 
       if (response.ok && data.success) {
         console.log("LiDAR file uploaded successfully:", data);
         setLidarUploadSuccess(true);
+
+        // Clear dialog states
+        setLidarDuplicateError(null);
+        setShowLidarOverwriteDialog(false);
 
         // Reload elevation sources if viewing the same trail
         if (selectedTrail?.id === selectedLidarTrailId) {
           loadElevationSources(selectedTrail.id);
         }
 
+        // Clear upload states
+        setIsUploadingLidar(false);
+        setPendingLidarFile(null);
+        setSelectedLidarTrailId(null);
+
         // Reset success message after 3 seconds
         setTimeout(() => {
           setLidarUploadSuccess(false);
         }, 3000);
       } else {
-        console.error("LiDAR upload failed:", data.error || data.detail);
-        alert(`Upload failed: ${data.error || data.detail || "Unknown error"}`);
+        // Handle errors - properly extract error message
+        console.log("Error response data:", data);
+        let errorMessage = "Unknown error";
+
+        if (typeof data.detail === "string") {
+          errorMessage = data.detail;
+        } else if (typeof data.error === "string") {
+          errorMessage = data.error;
+        } else if (data.detail && typeof data.detail === "object") {
+          errorMessage = JSON.stringify(data.detail);
+        } else if (data.error && typeof data.error === "object") {
+          errorMessage = JSON.stringify(data.error);
+        }
+
+        if (response.status === 409) {
+          // Duplicate detected - show overwrite dialog
+          console.warn("LiDAR file conflict:", errorMessage);
+          setLidarDuplicateError(errorMessage);
+          setShowLidarOverwriteDialog(true);
+          setIsUploadingLidar(false);
+          // Don't clear pendingLidarFile and selectedLidarTrailId - needed for overwrite
+          return;
+        } else if (response.status === 413) {
+          // File too large
+          console.warn("File too large:", errorMessage);
+          // Extract script command from error message if available
+          const match = errorMessage.match(/Run: (.+)$/);
+          setLidarFileSizeInfo({
+            filename: pendingLidarFile.name,
+            command: match ? match[1] : null,
+            errorMessage: errorMessage,
+          });
+          setShowLidarFileSizeWarning(true);
+          setIsUploadingLidar(false);
+          setPendingLidarFile(null);
+          setSelectedLidarTrailId(null);
+          return;
+        } else {
+          console.error("LiDAR upload failed:", errorMessage);
+          alert(`Upload failed: ${errorMessage}`);
+          // Clear states for other errors
+          setIsUploadingLidar(false);
+          setPendingLidarFile(null);
+          setSelectedLidarTrailId(null);
+        }
       }
     } catch (error) {
       console.error("LiDAR upload error:", error);
       alert(`Upload error: ${error.message}`);
-    } finally {
+      // Clear states on exception
       setIsUploadingLidar(false);
       setPendingLidarFile(null);
       setSelectedLidarTrailId(null);
     }
+  };
+
+  // Handle LiDAR overwrite confirmation
+  const handleLidarOverwriteConfirm = async () => {
+    setShowLidarOverwriteDialog(false);
+    await handleLidarUploadWithTrail(true);
   };
 
   // Cancel upload
@@ -1826,6 +1940,167 @@ export default function Dashboard() {
 
       {/* Info/Help Page Modal */}
       {showInfoPage && <InfoPage onClose={() => setShowInfoPage(false)} />}
+
+      {/* GPX Overwrite Confirmation Dialog */}
+      {showGpxOverwriteDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-red-600 mb-2">
+                ⚠️ Duplicate Trail Detected
+              </h2>
+              <p className="text-sm text-gray-700 mb-4">{gpxDuplicateError}</p>
+              <p className="text-sm font-medium text-gray-800 mb-2">
+                📁 File:{" "}
+                <span className="font-normal">{pendingGpxFile?.name}</span>
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-red-800 font-semibold mb-2">
+                  ⚠️ Warning: Overwriting will:
+                </p>
+                <ul className="text-sm text-red-700 space-y-1 ml-4">
+                  <li>• Delete the existing trail</li>
+                  <li>• Delete all associated LiDAR files</li>
+                  <li>• Upload the new trail data</li>
+                </ul>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                This action cannot be undone. Make sure this is what you want to
+                do.
+              </p>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowGpxOverwriteDialog(false);
+                    setPendingGpxFile(null);
+                    setGpxDuplicateError(null);
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleGpxOverwriteConfirm}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Overwrite Trail
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LiDAR Overwrite Confirmation Dialog */}
+      {showLidarOverwriteDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-orange-600 mb-2">
+                ⚠️ LiDAR File Conflict
+              </h2>
+              <p className="text-sm text-gray-700 mb-4">
+                {lidarDuplicateError}
+              </p>
+              <p className="text-sm font-medium text-gray-800 mb-2">
+                📁 File:{" "}
+                <span className="font-normal">{pendingLidarFile?.name}</span>
+              </p>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-orange-800 mb-2">
+                  Do you want to replace the existing LiDAR file(s) for this
+                  trail?
+                </p>
+                <p className="text-xs text-orange-700">
+                  This will delete the old LiDAR file(s) and upload the new one.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowLidarOverwriteDialog(false);
+                    setPendingLidarFile(null);
+                    setSelectedLidarTrailId(null);
+                    setLidarDuplicateError(null);
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleLidarOverwriteConfirm}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  Replace File
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LiDAR File Size Warning Dialog */}
+      {showLidarFileSizeWarning && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-red-600 mb-2">
+                📦 File Too Large for Upload
+              </h2>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                <p className="text-sm font-medium text-gray-800 mb-1">
+                  📁 {lidarFileSizeInfo?.filename}
+                </p>
+                <p className="text-sm text-gray-600">
+                  Size:{" "}
+                  <strong>
+                    {lidarFileSizeInfo?.sizeGB || lidarFileSizeInfo?.sizeMB}
+                    {lidarFileSizeInfo?.sizeGB ? " GB" : " MB"}
+                  </strong>
+                </p>
+              </div>
+              <p className="text-sm text-gray-700 mb-4">
+                Files larger than <strong>1 GB</strong> cannot be uploaded
+                through the web interface. Please use the backend script
+                instead:
+              </p>
+              <div className="bg-gray-900 rounded-lg p-4 mb-4 overflow-x-auto">
+                <code className="text-xs text-green-400 font-mono block whitespace-pre">
+                  {lidarFileSizeInfo?.command ||
+                    `python3 add_local_lidar_to_db.py \\\n  "path/to/${lidarFileSizeInfo?.filename}" \\\n  ${lidarFileSizeInfo?.trailId}`}
+                </code>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <p className="text-xs text-blue-800 mb-1">
+                  💡 <strong>Instructions:</strong>
+                </p>
+                <ol className="text-xs text-blue-700 space-y-1 ml-4 list-decimal">
+                  <li>Place the LiDAR file on the backend server</li>
+                  <li>Run the command above from the backend directory</li>
+                  <li>
+                    The file will be registered without uploading to cloud
+                    storage
+                  </li>
+                </ol>
+              </div>
+
+              <Button
+                onClick={() => {
+                  setShowLidarFileSizeWarning(false);
+                  setLidarFileSizeInfo(null);
+                }}
+                className="w-full"
+              >
+                Got It
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LiDAR Trail Selection Dialog */}
       {showLidarTrailSelector && (

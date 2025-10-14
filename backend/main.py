@@ -1384,8 +1384,27 @@ async def get_map():
 
 
 @app.post("/upload-gpx")
-async def upload_gpx(file: UploadFile = File(...)):
-    """Handle GPX file upload and save to Supabase"""
+async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false")):
+    """Handle GPX file upload and save to Supabase
+    
+    Args:
+        file: GPX file to upload
+        overwrite: If True, will delete existing trail with same name/location before adding new one
+    """
+    # Convert overwrite string to boolean
+    print(f"📤 Uploading GPX file: {file.filename}")
+    print(f"   Raw overwrite value: '{overwrite}' (type: {type(overwrite).__name__})")
+    
+    # Safety check for None or empty string
+    if overwrite is None:
+        overwrite_bool = False
+    elif isinstance(overwrite, str):
+        overwrite_bool = overwrite.lower() in ("true", "1", "yes")
+    else:
+        overwrite_bool = bool(overwrite)
+    
+    print(f"   Converted to bool: {overwrite_bool}")
+    
     if not file.filename.lower().endswith(".gpx"):
         raise HTTPException(status_code=400, detail="File must be a GPX file")
 
@@ -1554,17 +1573,34 @@ async def upload_gpx(file: UploadFile = File(...)):
             supabase.table("trails").select("*").eq("name", trail_name).execute()
         )
 
+        duplicate_trail_id = None
         if existing_trails_response.data:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Trail with name '{trail_name}' already exists in database",
-            )
+            if not overwrite_bool:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Trail with name '{trail_name}' already exists in database",
+                )
+            else:
+                # Delete existing trail and its associated LiDAR files
+                duplicate_trail_id = existing_trails_response.data[0]["id"]
+                print(f"🗑️  Overwrite mode: Deleting existing trail ID {duplicate_trail_id}")
+                
+                # Delete associated LiDAR files first
+                lidar_files = supabase.table("lidar_files").select("*").eq("trail_id", duplicate_trail_id).execute()
+                if lidar_files.data:
+                    print(f"   Deleting {len(lidar_files.data)} associated LiDAR file(s)")
+                    for lidar_file in lidar_files.data:
+                        supabase.table("lidar_files").delete().eq("id", lidar_file["id"]).execute()
+                
+                # Delete the trail
+                supabase.table("trails").delete().eq("id", duplicate_trail_id).execute()
+                print(f"   ✅ Deleted trail and associated data")
 
         # Check for similar starting coordinates (within ~100m radius)
         # This prevents uploading the same trail with different names
         start_lat, start_lon = coords[0]
         all_trails_response = (
-            supabase.table("trails").select("name, coordinates").execute()
+            supabase.table("trails").select("id, name, coordinates").execute()
         )
 
         for existing_trail in all_trails_response.data:
@@ -1579,10 +1615,27 @@ async def upload_gpx(file: UploadFile = File(...)):
 
                 # If starts are within 100 meters, likely duplicate
                 if distance_between_starts < 100:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"Trail starting near same location as existing trail '{existing_trail['name']}' (within 100m). Possible duplicate.",
-                    )
+                    if not overwrite_bool:
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"Trail starting near same location as existing trail '{existing_trail['name']}' (within 100m). Possible duplicate.",
+                        )
+                    else:
+                        # Delete this coordinate-duplicate trail too
+                        coord_dup_id = existing_trail["id"]
+                        if coord_dup_id != duplicate_trail_id:  # Don't delete twice
+                            print(f"🗑️  Overwrite mode: Deleting coordinate-duplicate trail ID {coord_dup_id}")
+                            
+                            # Delete associated LiDAR files
+                            lidar_files = supabase.table("lidar_files").select("*").eq("trail_id", coord_dup_id).execute()
+                            if lidar_files.data:
+                                print(f"   Deleting {len(lidar_files.data)} associated LiDAR file(s)")
+                                for lidar_file in lidar_files.data:
+                                    supabase.table("lidar_files").delete().eq("id", lidar_file["id"]).execute()
+                            
+                            # Delete the trail
+                            supabase.table("trails").delete().eq("id", coord_dup_id).execute()
+                            print(f"   ✅ Deleted coordinate-duplicate trail")
 
         # Create new trail data for Supabase
         weather_exposure = get_trail_weather_exposure({"max_elevation": max_elevation})
@@ -1656,9 +1709,15 @@ async def upload_gpx(file: UploadFile = File(...)):
                 status_code=500, detail="Failed to insert trail into database"
             )
 
+    except HTTPException:
+        # Re-raise HTTPExceptions (409, 400, etc.) without wrapping them
+        raise
     except Exception as e:
-        print(f"Upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"❌ Upload error: {type(e).__name__}: {e}")
+        print(f"❌ Full traceback:\n{error_details}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e) or 'Unknown error'}")
 
 
 @app.get("/trail/{trail_id}/3d-terrain-viewer")
@@ -2272,19 +2331,36 @@ async def get_trail_elevation_sources(trail_id: int):
 
 @app.post("/upload-lidar")
 async def upload_lidar_file(
-    file: UploadFile = File(...), trail_id: Optional[int] = Form(None)
+    file: UploadFile = File(...), 
+    trail_id: Optional[int] = Form(None),
+    overwrite: str = Form("false")  # Receive as string, convert to bool below
 ):
     """
     Upload a LiDAR .las/.laz file to Supabase Storage and store metadata in the database
-    Checks for duplicates before uploading
+    Checks for duplicates and file size before uploading
 
     Args:
         file: LiDAR .las or .laz file (compressed or uncompressed)
         trail_id: Optional trail ID to associate with this LiDAR file
+        overwrite: If True, will delete existing LiDAR for this trail before uploading
     """
     temp_path = None
     try:
-        print(f"📤 Uploading LiDAR file with trail_id: {trail_id}")
+        # Convert overwrite string to boolean
+        print(f"📤 Uploading LiDAR file: {file.filename}")
+        print(f"   Trail ID: {trail_id}")
+        print(f"   Raw overwrite value: '{overwrite}' (type: {type(overwrite).__name__})")
+        
+        # Safety check for None or empty string
+        if overwrite is None:
+            overwrite_bool = False
+        elif isinstance(overwrite, str):
+            overwrite_bool = overwrite.lower() in ("true", "1", "yes")
+        else:
+            overwrite_bool = bool(overwrite)
+        
+        print(f"   Converted to bool: {overwrite_bool}")
+        
         # Validate file extension
         if not (file.filename.endswith(".las") or file.filename.endswith(".laz")):
             raise HTTPException(
@@ -2292,33 +2368,92 @@ async def upload_lidar_file(
                 detail="Invalid file format. Only .las and .laz files are supported.",
             )
 
+        # Read file content to check size
+        print(f"📊 Reading file to check size...")
+        content = await file.read()
+        file_size_mb = len(content) / (1024 * 1024)
+        
+        # Check if file is too large (>= 1GB)
+        if file_size_mb >= 1024:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large ({file_size_mb:.0f} MB). Files >= 1GB must be added using the add_local_lidar_to_db.py script. "
+                f"Run: python3 add_local_lidar_to_db.py 'path/to/{file.filename}' {trail_id or '<trail_id>'}",
+            )
+        
+        # Check if trail already has LiDAR file(s)
+        if trail_id and not overwrite_bool:
+            existing_trail_lidar = (
+                supabase.table("lidar_files")
+                .select("id, filename")
+                .eq("trail_id", trail_id)
+                .execute()
+            )
+            if existing_trail_lidar.data:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Trail ID {trail_id} already has LiDAR file(s): {', '.join([f['filename'] for f in existing_trail_lidar.data])}. "
+                    "Use overwrite=true to replace existing files.",
+                )
+
         # Check for duplicates in database (by original filename)
         print(f"🔍 Checking for existing file: {file.filename}")
         existing_check = (
             supabase.table("lidar_files")
-            .select("id, filename, file_url")
+            .select("id, filename, file_url, trail_id")
             .ilike("filename", f"%{file.filename}")
             .execute()
         )
 
         if existing_check.data:
-            existing_file = existing_check.data[0]
-            print(f"⚠️  File already exists: {existing_file['filename']}")
-            raise HTTPException(
-                status_code=409,
-                detail=f"File '{file.filename}' already exists in database. "
-                f"Existing file: {existing_file['filename']}. "
-                f"Please rename your file or delete the existing one first.",
+            if not overwrite_bool:
+                existing_file = existing_check.data[0]
+                print(f"⚠️  File already exists: {existing_file['filename']}")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"File '{file.filename}' already exists in database. "
+                    f"Existing file: {existing_file['filename']}. "
+                    f"Please rename your file or delete the existing one first.",
+                )
+            else:
+                # Delete existing file(s) with same name
+                for existing_file in existing_check.data:
+                    print(f"🗑️  Overwrite mode: Deleting existing file ID {existing_file['id']}")
+                    try:
+                        # Delete from storage
+                        if existing_file['file_url'] and not existing_file['file_url'].startswith("local://"):
+                            supabase.storage.from_("lidar-files").remove([existing_file['filename']])
+                    except Exception as e:
+                        print(f"   ⚠️  Could not delete from storage: {e}")
+                    # Delete from database
+                    supabase.table("lidar_files").delete().eq("id", existing_file["id"]).execute()
+                    print(f"   ✅ Deleted existing file")
+        
+        # If overwriting trail's LiDAR, delete existing trail LiDAR files
+        if trail_id and overwrite_bool:
+            existing_trail_lidar = (
+                supabase.table("lidar_files")
+                .select("id, filename, file_url")
+                .eq("trail_id", trail_id)
+                .execute()
             )
+            if existing_trail_lidar.data:
+                print(f"�️  Overwrite mode: Deleting {len(existing_trail_lidar.data)} existing LiDAR file(s) for trail {trail_id}")
+                for lidar_file in existing_trail_lidar.data:
+                    try:
+                        # Delete from storage
+                        if lidar_file['file_url'] and not lidar_file['file_url'].startswith("local://"):
+                            supabase.storage.from_("lidar-files").remove([lidar_file['filename']])
+                    except Exception as e:
+                        print(f"   ⚠️  Could not delete from storage: {e}")
+                    # Delete from database
+                    supabase.table("lidar_files").delete().eq("id", lidar_file["id"]).execute()
+                print(f"   ✅ Deleted existing trail LiDAR files")
 
         # Generate unique filename to avoid conflicts in storage
         timestamp = uuid.uuid4().hex[:8]
         safe_filename = f"{timestamp}_{file.filename}"
 
-        # Read file content
-        print(f"📤 Reading LiDAR file: {file.filename}")
-        content = await file.read()
-        file_size_mb = len(content) / (1024 * 1024)
         print(f"📊 File size: {file_size_mb:.2f} MB")
 
         # Upload to Supabase Storage
@@ -2534,6 +2669,79 @@ async def delete_lidar_file(lidar_id: int):
         print(f"❌ Error deleting LiDAR file: {e}")
         import traceback
 
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/trail/{trail_id}")
+async def delete_trail(trail_id: int):
+    """
+    Delete a trail and all associated LiDAR files
+
+    Args:
+        trail_id: ID of the trail to delete
+    """
+    try:
+        print(f"🔍 Looking up trail with ID: {trail_id}")
+        
+        # Get trail info
+        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        if not trail_response.data:
+            raise HTTPException(status_code=404, detail=f"Trail with ID {trail_id} not found")
+        
+        trail = trail_response.data[0]
+        trail_name = trail.get("name")
+        
+        print(f"📂 Found trail: {trail_name}")
+        
+        # Delete associated LiDAR files first
+        lidar_files = supabase.table("lidar_files").select("*").eq("trail_id", trail_id).execute()
+        deleted_lidar_count = 0
+        
+        if lidar_files.data:
+            print(f"🗑️  Deleting {len(lidar_files.data)} associated LiDAR file(s)")
+            for lidar_file in lidar_files.data:
+                filename = lidar_file.get("filename")
+                file_url = lidar_file.get("file_url")
+                
+                # Delete from storage if not a local file
+                if file_url and not file_url.startswith("local://") and filename:
+                    try:
+                        supabase.storage.from_("lidar-files").remove([filename])
+                        print(f"   ✅ Deleted from storage: {filename}")
+                    except Exception as e:
+                        print(f"   ⚠️  Could not delete from storage: {filename} - {e}")
+                
+                # Delete from database
+                supabase.table("lidar_files").delete().eq("id", lidar_file["id"]).execute()
+                deleted_lidar_count += 1
+            
+            print(f"   ✅ Deleted {deleted_lidar_count} LiDAR file(s)")
+        
+        # Delete the trail
+        print(f"🗑️  Deleting trail: {trail_name}")
+        supabase.table("trails").delete().eq("id", trail_id).execute()
+        print(f"✅ Trail deleted")
+        
+        # Reinitialize LiDAR extractor if files were deleted
+        if deleted_lidar_count > 0:
+            global lidar_extractor
+            if lidar_extractor:
+                lidar_extractor.lidar_files = lidar_extractor._find_lidar_files()
+                print(f"🔄 LiDAR extractor reinitialized")
+        
+        return {
+            "success": True,
+            "message": f"Trail '{trail_name}' and {deleted_lidar_count} associated LiDAR file(s) deleted successfully",
+            "deleted_trail": trail,
+            "deleted_lidar_count": deleted_lidar_count,
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting trail: {e}")
+        import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
