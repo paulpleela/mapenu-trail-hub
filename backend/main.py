@@ -1624,19 +1624,17 @@ async def upload_gpx(file: UploadFile = File(...)):
             "elevation_change_total": int(round(elevation_gain + elevation_loss, 0)),
             # Store weather data in existing numeric fields, we'll interpret on frontend
             "weather_difficulty_multiplier": weather_score,  # Use existing column with new meaning
-            # More sensitive technical difficulty calculation (1-10 scale)
+            # Fixed technical difficulty calculation (1-10 scale)  
             # Factors: max slope (40%), rolling hills (30%), avg slope (30%)
-            # This spreads trails across the scale better
-            "technical_rating": max(
-                1,
-                min(
-                    10,
-                    round(
-                        1
-                        + (max_slope / 40)
-                        * 3.5  # Max slope contribution (0-3.5 points)
-                        + (rolling_hills_index * 2.5)  # Rolling hills (0-2.5+ points)
-                        + (avg_slope / 8) * 3  # Average slope matters too (0-3 points)
+            # Properly normalized to produce 1-10 range
+            "technical_rating": round(
+                max(
+                    1.0,
+                    min(
+                        10.0,
+                        1 + (max_slope / 100) * 3.5  # Max slope: 0-100% -> 0-3.5 points
+                        + (min(rolling_hills_index / 50, 1.0) * 3.5)  # Rolling hills normalized: 0-50 -> 0-3.5 points  
+                        + (avg_slope / 30) * 2.0  # Avg slope: 0-30% -> 0-2 points
                     ),
                 ),
             ),
