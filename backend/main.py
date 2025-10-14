@@ -2382,6 +2382,7 @@ async def upload_lidar_file(
             )
         
         # Check if trail already has LiDAR file(s)
+        print(f"🔍 Checking trail LiDAR: trail_id={trail_id}, overwrite_bool={overwrite_bool}")
         if trail_id and not overwrite_bool:
             existing_trail_lidar = (
                 supabase.table("lidar_files")
@@ -2389,7 +2390,9 @@ async def upload_lidar_file(
                 .eq("trail_id", trail_id)
                 .execute()
             )
+            print(f"🔍 Existing trail LiDAR check: {len(existing_trail_lidar.data) if existing_trail_lidar.data else 0} file(s) found")
             if existing_trail_lidar.data:
+                print(f"⚠️  Trail already has LiDAR - raising 409 error")
                 raise HTTPException(
                     status_code=409,
                     detail=f"Trail ID {trail_id} already has LiDAR file(s): {', '.join([f['filename'] for f in existing_trail_lidar.data])}. "

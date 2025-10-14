@@ -665,6 +665,14 @@ export default function Dashboard() {
       formData.append("trail_id", selectedLidarTrailId);
       formData.append("overwrite", overwrite ? "true" : "false");
 
+      console.log("📤 LiDAR Upload - File:", pendingLidarFile.name);
+      console.log("📤 LiDAR Upload - Trail ID:", selectedLidarTrailId);
+      console.log("📤 LiDAR Upload - Overwrite param:", overwrite);
+      console.log(
+        "📤 LiDAR Upload - Sending overwrite as:",
+        overwrite ? "true" : "false"
+      );
+
       const response = await fetch(`${API_BASE_URL}/upload-lidar`, {
         method: "POST",
         body: formData,
@@ -2153,7 +2161,7 @@ export default function Dashboard() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={handleLidarUploadWithTrail}
+                  onClick={() => handleLidarUploadWithTrail(false)}
                   disabled={!selectedLidarTrailId || isUploadingLidar}
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
                 >
