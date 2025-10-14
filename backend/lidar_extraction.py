@@ -1,6 +1,6 @@
 """
 LiDAR Elevation Profile Extraction Module
-Extracts elevation profiles from .las LiDAR point cloud files
+Extracts elevation profiles from .las/.laz LiDAR point cloud files
 Now supports Supabase Storage with local caching
 """
 
@@ -55,7 +55,7 @@ class LiDARExtractor:
         if os.path.exists(self.lidar_base_path):
             for root, dirs, files in os.walk(self.lidar_base_path):
                 for file in files:
-                    if file.endswith(".las"):
+                    if file.endswith(".las") or file.endswith(".laz"):
                         file_path = os.path.join(root, file)
                         # Add as legacy record if not already in database
                         if not any(r.get("filename") == file for r in lidar_records):
