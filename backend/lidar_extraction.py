@@ -128,6 +128,16 @@ class LiDARExtractor:
         file_url = lidar_record.get("file_url")
         file_path = lidar_record.get("file_path")
 
+        # Check for local:// URL (for testing with large files)
+        if file_url and file_url.startswith("local://"):
+            local_path = file_url.replace("local://", "")
+            if os.path.exists(local_path):
+                print(f"📂 Using local file: {local_path}")
+                return local_path
+            else:
+                print(f"⚠️  Local file not found: {local_path}")
+                return None
+
         # If we have a local file_path and it exists, use it
         if file_path and os.path.exists(file_path):
             return file_path
