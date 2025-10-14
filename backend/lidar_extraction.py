@@ -189,6 +189,20 @@ class LiDARExtractor:
         """
         print("🔄 Creating elevation profile from relative-coordinate LiDAR")
 
+        # Filter for ground points if classification is available
+        try:
+            if hasattr(las_data, "classification"):
+                classification = las_data.classification
+                ground_mask = classification == 2  # Class 2 = Ground
+
+                if np.any(ground_mask):
+                    lidar_x = lidar_x[ground_mask]
+                    lidar_y = lidar_y[ground_mask]
+                    lidar_z = lidar_z[ground_mask]
+                    print(f"✅ Filtered to {len(lidar_x):,} ground points (class 2)")
+        except Exception as e:
+            print(f"⚠️  Ground filtering failed: {e}, using all points")
+
         # Create a path through the LiDAR points
         # Strategy: Sort points to create a smooth path
         lidar_points = np.column_stack([lidar_x, lidar_y, lidar_z])
@@ -219,9 +233,25 @@ class LiDARExtractor:
 
         sorted_points = lidar_points[sort_indices]
 
-        # Sample evenly along the sorted points
-        sample_indices = np.linspace(0, len(sorted_points) - 1, num_samples, dtype=int)
-        sampled_elevations = sorted_points[sample_indices, 2]  # Z values
+        # Sample evenly along the sorted points, taking the minimum elevation in each segment
+        # This helps filter out trees and obstacles by selecting ground-level points
+        segment_size = max(1, len(sorted_points) // num_samples)
+        sampled_elevations = []
+
+        for i in range(num_samples):
+            start_idx = i * segment_size
+            end_idx = min(start_idx + segment_size, len(sorted_points))
+
+            if start_idx < len(sorted_points):
+                # Take the minimum elevation in this segment (closest to ground)
+                segment_elevations = sorted_points[start_idx:end_idx, 2]
+                min_elevation = np.min(segment_elevations)
+                sampled_elevations.append(min_elevation)
+
+        sampled_elevations = np.array(sampled_elevations)
+        sample_indices = np.linspace(
+            0, len(sorted_points) - 1, len(sampled_elevations), dtype=int
+        )
 
         # Calculate distances
         distances = []
@@ -433,12 +463,43 @@ class LiDARExtractor:
             print(f"📖 Reading LiDAR file: {os.path.basename(las_file_path)}")
             las_data = laspy.read(las_file_path)
 
-            # Extract LiDAR point cloud coordinates
-            lidar_x = las_data.x
-            lidar_y = las_data.y
-            lidar_z = las_data.z
+            # Filter for ground points only (classification = 2) if available
+            print(f"Total LiDAR points: {len(las_data.points):,}")
 
-            print(f"LiDAR points: {len(lidar_x):,}")
+            try:
+                # Try to get classification data
+                if hasattr(las_data, "classification"):
+                    classification = las_data.classification
+                    ground_mask = classification == 2  # Class 2 = Ground
+
+                    if np.any(ground_mask):
+                        lidar_x = las_data.x[ground_mask]
+                        lidar_y = las_data.y[ground_mask]
+                        lidar_z = las_data.z[ground_mask]
+                        print(
+                            f"✅ Filtered to {len(lidar_x):,} ground points (class 2)"
+                        )
+                    else:
+                        # No ground classification, use all points but filter by elevation
+                        print(
+                            "⚠️  No ground classification found, using elevation filtering"
+                        )
+                        lidar_x = las_data.x
+                        lidar_y = las_data.y
+                        lidar_z = las_data.z
+                else:
+                    # No classification field, use all points
+                    print("⚠️  No classification field, using all points")
+                    lidar_x = las_data.x
+                    lidar_y = las_data.y
+                    lidar_z = las_data.z
+            except Exception as e:
+                print(f"⚠️  Classification filtering failed: {e}, using all points")
+                lidar_x = las_data.x
+                lidar_y = las_data.y
+                lidar_z = las_data.z
+
+            print(f"Using {len(lidar_x):,} LiDAR points for elevation extraction")
             print(f"Trail points: {len(trail_coords)}")
 
             # Check if LiDAR uses relative coordinates (centered near 0,0)
@@ -478,9 +539,12 @@ class LiDARExtractor:
                 indices = kdtree.query_ball_point([x, y], r=search_radius)
 
                 if indices:
-                    # Use median elevation of nearby points (more robust than mean)
+                    # Use the minimum elevation (closest to ground) to avoid trees/obstacles
+                    # This gives us the ground level even if there are overhead obstacles
                     nearby_elevations = lidar_z[indices]
-                    elevation = np.median(nearby_elevations)
+                    elevation = np.min(
+                        nearby_elevations
+                    )  # Use minimum instead of median
                     elevations.append(float(elevation))
                     matched_coords.append(trail_coords[i])
                 else:
