@@ -2058,10 +2058,43 @@ async def get_trail_elevation_sources(trail_id: int):
                     # Ensure same length as coordinates by interpolation if needed
                     lidar_elevations = lidar_result.get("elevations", [])
 
+                    # Use LiDAR's own distances if provided (for relative coordinate files)
+                    # Otherwise use trail distances
+                    if "distances" in lidar_result and lidar_result["distances"]:
+                        lidar_distances = lidar_result["distances"]
+                    else:
+                        lidar_distances = distances_km[: len(lidar_elevations)]
+
+                    # Align LiDAR elevations with GPX if using relative coordinates
+                    note = lidar_result.get("note", "")
+                    if (
+                        "relative coordinates" in note.lower()
+                        and sources["GPX"]["available"]
+                    ):
+                        gpx_elevations = sources["GPX"]["elevations"]
+                        if gpx_elevations and lidar_elevations:
+                            # Calculate offset to align starting elevations
+                            gpx_start = gpx_elevations[0]
+                            lidar_start = lidar_elevations[0]
+                            elevation_offset = gpx_start - lidar_start
+
+                            # Apply offset to all LiDAR elevations
+                            lidar_elevations = [
+                                e + elevation_offset for e in lidar_elevations
+                            ]
+
+                            print(
+                                f"   🔧 Aligned LiDAR elevations: offset={elevation_offset:.1f}m"
+                            )
+                            print(
+                                f"      GPX start: {gpx_start:.1f}m, LiDAR start (adjusted): {lidar_elevations[0]:.1f}m"
+                            )
+                            note += f" | Aligned to GPX baseline (offset: {elevation_offset:.1f}m)"
+
                     sources["LiDAR"] = {
                         "available": True,
                         "elevations": lidar_elevations,
-                        "distances": distances_km[: len(lidar_elevations)],
+                        "distances": lidar_distances,
                         "coordinates": lidar_result.get(
                             "coordinates", coordinates[: len(lidar_elevations)]
                         ),
@@ -2069,6 +2102,7 @@ async def get_trail_elevation_sources(trail_id: int):
                         "data_points": len(lidar_elevations),
                         "coverage_percent": lidar_result.get("coverage_percent", 0),
                         "total_lidar_points": lidar_result.get("total_lidar_points", 0),
+                        "note": note,
                     }
                 else:
                     sources["LiDAR"] = {
