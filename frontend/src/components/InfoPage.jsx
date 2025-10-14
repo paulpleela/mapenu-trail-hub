@@ -698,25 +698,63 @@ export default function InfoPage({ onClose }) {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <p className="text-sm text-gray-600 mb-4">
-                      Technical challenge based on slopes and terrain
-                      complexity.
+                      Technical challenge rating based on slopes and terrain complexity. 
+                      Measures how technically demanding a trail is to navigate.
                     </p>
 
-                    <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
                       <h4 className="font-semibold text-gray-800 mb-3">
-                        ⚙️ Factors:
+                        🧮 Formula:
                       </h4>
-                      <ul className="text-sm text-gray-600 space-y-1">
+                      <div className="bg-white p-3 rounded border font-mono text-sm text-gray-800">
+                        <div className="text-blue-600 mb-2">Technical Rating = max(1, min(10, calculation))</div>
+                        <div>calculation = 1 + (max_slope/100)×3.5 + min(rolling_index/50, 1)×3.5 + (avg_slope/30)×2.0</div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                      <h4 className="font-semibold text-gray-800 mb-3">
+                        ⚙️ Components:
+                      </h4>
+                      <ul className="text-sm text-gray-600 space-y-2">
                         <li>
-                          • <strong>40%:</strong> Maximum slope
+                          • <strong>Max Slope (39%):</strong> Steepest section impact (0-100% → 0-3.5 points)
                         </li>
                         <li>
-                          • <strong>30%:</strong> Rolling hills intensity
+                          • <strong>Rolling Terrain (39%):</strong> Terrain complexity normalized (0-50 index → 0-3.5 points)
                         </li>
                         <li>
-                          • <strong>30%:</strong> Average slope
+                          • <strong>Average Slope (22%):</strong> Overall gradient difficulty (0-30% → 0-2.0 points)
                         </li>
                       </ul>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="bg-green-100 p-2 rounded text-center">
+                        <div className="font-bold text-green-800">Easy</div>
+                        <div className="text-green-600">1-3</div>
+                      </div>
+                      <div className="bg-yellow-100 p-2 rounded text-center">
+                        <div className="font-bold text-yellow-800">Moderate</div>
+                        <div className="text-yellow-600">4-6</div>
+                      </div>
+                      <div className="bg-orange-100 p-2 rounded text-center">
+                        <div className="font-bold text-orange-800">Hard</div>
+                        <div className="text-orange-600">7-8</div>
+                      </div>
+                      <div className="bg-red-100 p-2 rounded text-center">
+                        <div className="font-bold text-red-800">Extreme</div>
+                        <div className="text-red-600">9-10</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                      <h5 className="font-semibold text-blue-800 text-sm mb-2">💡 Real Examples:</h5>
+                      <div className="text-xs text-blue-700 space-y-1">
+                        <div>• <strong>375-Botanic-Gardens (4/10):</strong> 34% max, 7.6% avg, gentle rolling</div>
+                        <div>• <strong>Trail 1 (6/10):</strong> 41% max, 14.6% avg, moderate rolling</div>
+                        <div>• <strong>Trail 2 (8/10):</strong> 62% max, 24.9% avg, intense rolling</div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
