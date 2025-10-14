@@ -1,8 +1,16 @@
 """
 Add local LiDAR file to database for testing (without uploading to Supabase Storage)
+
+Usage:
+    python3 add_local_lidar_to_db.py <file_path> <trail_id>
+
+Examples:
+    python3 add_local_lidar_to_db.py data/LiDAR/Coottha_Mt_1.las 51
+    python3 add_local_lidar_to_db.py data/LiDAR/trail_1.las 51
 """
 
 import os
+import sys
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import laspy
@@ -20,8 +28,22 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Path to the local LiDAR file
-lidar_file_path = "data/LiDAR/Coottha Mt 1.las"
+# Parse command line arguments
+if len(sys.argv) < 3:
+    print("❌ Error: Missing required arguments")
+    print("\nUsage:")
+    print("  python3 add_local_lidar_to_db.py <file_path> <trail_id>")
+    print("\nExamples:")
+    print("  python3 add_local_lidar_to_db.py data/LiDAR/Coottha_Mt_1.las 51")
+    print("  python3 add_local_lidar_to_db.py data/LiDAR/trail_1.las 51")
+    exit(1)
+
+lidar_file_path = sys.argv[1]
+try:
+    trail_id = int(sys.argv[2])
+except ValueError:
+    print(f"❌ Error: trail_id must be a number, got: {sys.argv[2]}")
+    exit(1)
 
 print("=" * 60)
 print("Adding Local LiDAR File to Database")
@@ -30,6 +52,7 @@ print("=" * 60)
 # Check if file exists
 if not os.path.exists(lidar_file_path):
     print(f"❌ File not found: {lidar_file_path}")
+    print(f"   Current directory: {os.getcwd()}")
     exit(1)
 
 print(f"\n📂 Reading LiDAR file: {lidar_file_path}")
@@ -49,9 +72,10 @@ try:
     print(f"           Z({header.z_min:.1f} to {header.z_max:.1f})")
 
     # Create database record
+    filename = os.path.basename(lidar_file_path)
     lidar_record = {
-        "trail_id": 51,  # Assign to Trail 1
-        "filename": "Coottha Mt 1.las",
+        "trail_id": trail_id,
+        "filename": filename,
         "file_url": f"local://{os.path.abspath(lidar_file_path)}",  # Special local:// URL
         "file_size_mb": round(file_size_mb, 2),
         "point_count": int(header.point_count),
@@ -70,6 +94,7 @@ try:
 
     print(f"\n💾 Inserting into database...")
     print(f"   Trail ID: {lidar_record['trail_id']}")
+    print(f"   Filename: {lidar_record['filename']}")
     print(f"   File URL: {lidar_record['file_url']}")
 
     # Insert into database
@@ -78,9 +103,13 @@ try:
     if response.data:
         print(f"\n✅ Success! LiDAR file added to database")
         print(f"   Database ID: {response.data[0]['id']}")
-        print(f"\n📍 This file is now associated with Trail 1 (trail_id=51)")
+        print(f"\n📍 This file is now associated with Trail ID: {trail_id}")
         print(f"\n⚠️  Note: The file is stored locally, not in Supabase Storage")
         print(f"   The backend will read it directly from: {lidar_file_path}")
+        print(f"\n💡 To view this LiDAR data:")
+        print(f"   1. Go to the frontend")
+        print(f"   2. Select the trail with ID {trail_id}")
+        print(f"   3. Choose 'LiDAR' from the elevation source dropdown")
     else:
         print(f"\n❌ Failed to insert into database")
 
