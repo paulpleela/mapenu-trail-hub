@@ -1721,8 +1721,13 @@ async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false"
 
 
 @app.get("/trail/{trail_id}/3d-terrain-viewer")
-async def get_trail_3d_terrain_viewer(trail_id: int):
-    """Serve interactive 3D terrain visualization as a standalone HTML page"""
+async def get_trail_3d_terrain_viewer(trail_id: int, elevation_source: str = "gpx"):
+    """Serve interactive 3D terrain visualization as a standalone HTML page
+    
+    Args:
+        trail_id: Trail ID
+        elevation_source: "gpx" (default) or "lidar" - determines which elevation data to use for trail overlay
+    """
     try:
         if not dem_analyzer:
             return JSONResponse(
@@ -1742,9 +1747,51 @@ async def get_trail_3d_terrain_viewer(trail_id: int):
         if not coordinates:
             return JSONResponse({"error": "No coordinates available"}, status_code=400)
 
+        # Get LiDAR elevations if requested
+        lidar_elevations = None
+        if elevation_source.lower() == "lidar":
+            try:
+                # Extract elevation profile from LiDAR
+                profile = lidar_extractor.extract_elevation_profile(
+                    trail_coords=coordinates,
+                    trail_id=trail_id
+                )
+                if profile and profile.get("success") and "elevations" in profile:
+                    lidar_elevations = profile["elevations"]
+                    
+                    # Align LiDAR elevations to GPX baseline (same as elevation profile chart)
+                    elevation_profile = trail.get("elevation_profile", [])
+                    if elevation_profile and len(elevation_profile) > 0:
+                        # Get GPX elevations
+                        if isinstance(elevation_profile[0], dict):
+                            gpx_elevations = [point.get("elevation") for point in elevation_profile]
+                        else:
+                            gpx_elevations = elevation_profile
+                        
+                        if gpx_elevations and len(gpx_elevations) > 0 and len(lidar_elevations) > 0:
+                            # Calculate offset based on starting elevations (always align)
+                            gpx_start = gpx_elevations[0]
+                            lidar_start = lidar_elevations[0]
+                            elevation_offset = gpx_start - lidar_start
+                            
+                            # Apply offset to align LiDAR to GPX baseline
+                            lidar_elevations = [e + elevation_offset for e in lidar_elevations]
+                            print(f"🔧 Aligned LiDAR elevations to GPX baseline: offset={elevation_offset:.1f}m")
+                            print(f"   Before: GPX={gpx_start:.1f}m, LiDAR={lidar_start:.1f}m (diff: {elevation_offset:.1f}m)")
+                            print(f"   After:  GPX={gpx_start:.1f}m, LiDAR={lidar_elevations[0]:.1f}m (aligned ✓)")
+                    
+                    print(f"📊 Using {len(lidar_elevations)} LiDAR elevation points for 3D visualization")
+                else:
+                    print("⚠️  No LiDAR data available, falling back to GPX/DEM")
+                    elevation_source = "gpx"
+            except Exception as e:
+                print(f"❌ Error getting LiDAR elevations: {e}")
+                elevation_source = "gpx"
+
         # Generate 3D visualization
         visualization_result = dem_analyzer.create_3d_terrain_visualization(
-            coordinates, buffer_meters=1000
+            coordinates, buffer_meters=1000, elevation_source=elevation_source,
+            trail_id=trail_id, lidar_elevations=lidar_elevations
         )
 
         if not visualization_result.get("success"):
@@ -1877,8 +1924,13 @@ async def get_trail_dem_analysis(trail_id: int):
 
 
 @app.get("/trail/{trail_id}/3d-terrain")
-async def get_trail_3d_terrain(trail_id: int):
-    """Generate interactive 3D terrain visualization for a trail"""
+async def get_trail_3d_terrain(trail_id: int, elevation_source: str = "gpx"):
+    """Generate interactive 3D terrain visualization for a trail
+    
+    Args:
+        trail_id: Trail ID
+        elevation_source: "gpx" (default) or "lidar" - determines which elevation data to use for trail overlay
+    """
     try:
         if not dem_analyzer:
             return {"success": False, "error": "DEM analyzer not available"}
@@ -1896,9 +1948,51 @@ async def get_trail_3d_terrain(trail_id: int):
         if not coordinates:
             return {"success": False, "error": "No coordinates available"}
 
+        # Get LiDAR elevations if requested
+        lidar_elevations = None
+        if elevation_source.lower() == "lidar":
+            try:
+                # Extract elevation profile from LiDAR
+                profile = lidar_extractor.extract_elevation_profile(
+                    trail_coords=coordinates,
+                    trail_id=trail_id
+                )
+                if profile and profile.get("success") and "elevations" in profile:
+                    lidar_elevations = profile["elevations"]
+                    
+                    # Align LiDAR elevations to GPX baseline (same as elevation profile chart)
+                    elevation_profile = trail.get("elevation_profile", [])
+                    if elevation_profile and len(elevation_profile) > 0:
+                        # Get GPX elevations
+                        if isinstance(elevation_profile[0], dict):
+                            gpx_elevations = [point.get("elevation") for point in elevation_profile]
+                        else:
+                            gpx_elevations = elevation_profile
+                        
+                        if gpx_elevations and len(gpx_elevations) > 0 and len(lidar_elevations) > 0:
+                            # Calculate offset based on starting elevations (always align)
+                            gpx_start = gpx_elevations[0]
+                            lidar_start = lidar_elevations[0]
+                            elevation_offset = gpx_start - lidar_start
+                            
+                            # Apply offset to align LiDAR to GPX baseline
+                            lidar_elevations = [e + elevation_offset for e in lidar_elevations]
+                            print(f"🔧 Aligned LiDAR elevations to GPX baseline: offset={elevation_offset:.1f}m")
+                            print(f"   Before: GPX={gpx_start:.1f}m, LiDAR={lidar_start:.1f}m (diff: {elevation_offset:.1f}m)")
+                            print(f"   After:  GPX={gpx_start:.1f}m, LiDAR={lidar_elevations[0]:.1f}m (aligned ✓)")
+                    
+                    print(f"📊 Using {len(lidar_elevations)} LiDAR elevation points for 3D visualization")
+                else:
+                    print("⚠️  No LiDAR data available, falling back to GPX/DEM")
+                    elevation_source = "gpx"
+            except Exception as e:
+                print(f"❌ Error getting LiDAR elevations: {e}")
+                elevation_source = "gpx"
+
         # Generate 3D visualization
         visualization_result = dem_analyzer.create_3d_terrain_visualization(
-            coordinates, buffer_meters=1000
+            coordinates, buffer_meters=1000, elevation_source=elevation_source, 
+            trail_id=trail_id, lidar_elevations=lidar_elevations
         )
 
         if not visualization_result.get("success"):

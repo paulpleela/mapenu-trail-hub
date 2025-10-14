@@ -290,6 +290,8 @@ export default function Dashboard() {
   const [demCoverage, setDemCoverage] = useState(null);
   const [terrain3D, setTerrain3D] = useState(null);
   const [loading3D, setLoading3D] = useState(false);
+  const [terrain3DElevationSource, setTerrain3DElevationSource] =
+    useState("gpx");
 
   // Load trails on component mount
   useEffect(() => {
@@ -303,8 +305,10 @@ export default function Dashboard() {
     if (selectedTrail?.id) {
       // Clear previous 3D terrain when selecting new trail
       setTerrain3D(null);
+      // Reset elevation source to GPX when switching trails
+      setTerrain3DElevationSource("gpx");
       loadDemData(selectedTrail.id);
-      load3DTerrain(selectedTrail.id); // Auto-generate 3D terrain view
+      load3DTerrain(selectedTrail.id, "gpx"); // Auto-generate 3D terrain view with GPX
       loadElevationSources(selectedTrail.id); // Load multi-source elevation data
     }
   }, [selectedTrail]);
@@ -421,13 +425,13 @@ export default function Dashboard() {
     }
   };
 
-  const load3DTerrain = async (trailId) => {
+  const load3DTerrain = async (trailId, elevationSource = "gpx") => {
     if (!trailId) return;
 
     setLoading3D(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/trail/${trailId}/3d-terrain`
+        `${API_BASE_URL}/trail/${trailId}/3d-terrain?elevation_source=${elevationSource}`
       );
       const data = await response.json();
       if (data.success) {
@@ -440,6 +444,13 @@ export default function Dashboard() {
       setTerrain3D({ error: "Failed to generate 3D visualization" });
     } finally {
       setLoading3D(false);
+    }
+  };
+
+  const handleTerrain3DElevationSourceChange = (source) => {
+    setTerrain3DElevationSource(source);
+    if (selectedTrail?.id) {
+      load3DTerrain(selectedTrail.id, source);
     }
   };
 
@@ -1766,12 +1777,45 @@ export default function Dashboard() {
                             )}
                           </div>
 
+                          {/* Elevation Source Selector */}
+                          <div className="mb-3">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Trail Elevation Source:
+                            </label>
+                            <Select
+                              value={terrain3DElevationSource}
+                              onValueChange={
+                                handleTerrain3DElevationSourceChange
+                              }
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select elevation source" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="gpx">
+                                  GPX (DEM Sampled)
+                                </SelectItem>
+                                {elevationSources?.sources?.LiDAR
+                                  ?.available && (
+                                  <SelectItem value="lidar">
+                                    LiDAR (High Precision)
+                                  </SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {terrain3DElevationSource === "lidar"
+                                ? "🎯 Using high-precision LiDAR elevation data for trail overlay"
+                                : "📍 Using GPX coordinates with DEM-sampled elevations"}
+                            </p>
+                          </div>
+
                           {terrain3D?.visualization_type === "interactive" &&
                           terrain3D?.visualization_html ? (
                             <div className="text-center">
                               <div className="w-full h-screen rounded-lg border shadow-lg overflow-hidden">
                                 <iframe
-                                  src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer`}
+                                  src={`${API_BASE_URL}/trail/${selectedTrail.id}/3d-terrain-viewer?elevation_source=${terrain3DElevationSource}`}
                                   className="w-full h-full border-0"
                                   title="Interactive 3D Terrain Visualization"
                                   sandbox="allow-scripts allow-same-origin"
