@@ -38,3 +38,6 @@ pyvista>=0.42.0
 panel>=1.2.0
 
 # Note: some optional packages (open3d, pyvista) are large and may be installed only when needed
+
+# Excel parsing
+openpyxl>=3.1.2

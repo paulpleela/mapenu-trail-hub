@@ -64,6 +64,16 @@ if not supabase_url or not supabase_key:
 
 supabase: Client = create_client(supabase_url, supabase_key)
 
+# Optional service-role client for server-side writes that must bypass RLS.
+service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+supabase_service = None
+if service_role_key:
+    try:
+        supabase_service: Client = create_client(supabase_url, service_role_key)
+        print("Supabase service-role client initialized")
+    except Exception as e:
+        print(f"⚠️ Could not initialize supabase service client: {e}")
+
 # Import LiDAR extraction (after supabase is initialized)
 try:
     from lidar_extraction import LiDARExtractor
@@ -1386,7 +1396,7 @@ async def get_map():
 @app.post("/upload-gpx")
 async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false")):
     """Handle GPX file upload and save to Supabase
-    
+
     Args:
         file: GPX file to upload
         overwrite: If True, will delete existing trail with same name/location before adding new one
@@ -1394,7 +1404,7 @@ async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false"
     # Convert overwrite string to boolean
     print(f"📤 Uploading GPX file: {file.filename}")
     print(f"   Raw overwrite value: '{overwrite}' (type: {type(overwrite).__name__})")
-    
+
     # Safety check for None or empty string
     if overwrite is None:
         overwrite_bool = False
@@ -1402,9 +1412,9 @@ async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false"
         overwrite_bool = overwrite.lower() in ("true", "1", "yes")
     else:
         overwrite_bool = bool(overwrite)
-    
+
     print(f"   Converted to bool: {overwrite_bool}")
-    
+
     if not file.filename.lower().endswith(".gpx"):
         raise HTTPException(status_code=400, detail="File must be a GPX file")
 
@@ -1583,17 +1593,32 @@ async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false"
             else:
                 # Delete existing trail and its associated LiDAR files
                 duplicate_trail_id = existing_trails_response.data[0]["id"]
-                print(f"🗑️  Overwrite mode: Deleting existing trail ID {duplicate_trail_id}")
-                
+                print(
+                    f"🗑️  Overwrite mode: Deleting existing trail ID {duplicate_trail_id}"
+                )
+
                 # Delete associated LiDAR files first
-                lidar_files = supabase.table("lidar_files").select("*").eq("trail_id", duplicate_trail_id).execute()
+                lidar_files = (
+                    supabase.table("lidar_files")
+                    .select("*")
+                    .eq("trail_id", duplicate_trail_id)
+                    .execute()
+                )
                 if lidar_files.data:
-                    print(f"   Deleting {len(lidar_files.data)} associated LiDAR file(s)")
+                    print(
+                        f"   Deleting {len(lidar_files.data)} associated LiDAR file(s)"
+                    )
                     for lidar_file in lidar_files.data:
-                        supabase.table("lidar_files").delete().eq("id", lidar_file["id"]).execute()
-                
+                        db_client = supabase_service if supabase_service else supabase
+                        db_client.table("lidar_files").delete().eq(
+                            "id", lidar_file["id"]
+                        ).execute()
+
                 # Delete the trail
-                supabase.table("trails").delete().eq("id", duplicate_trail_id).execute()
+                db_client = supabase_service if supabase_service else supabase
+                db_client.table("trails").delete().eq(
+                    "id", duplicate_trail_id
+                ).execute()
                 print(f"   ✅ Deleted trail and associated data")
 
         # Check for similar starting coordinates (within ~100m radius)
@@ -1624,17 +1649,38 @@ async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false"
                         # Delete this coordinate-duplicate trail too
                         coord_dup_id = existing_trail["id"]
                         if coord_dup_id != duplicate_trail_id:  # Don't delete twice
-                            print(f"🗑️  Overwrite mode: Deleting coordinate-duplicate trail ID {coord_dup_id}")
-                            
+                            print(
+                                f"🗑️  Overwrite mode: Deleting coordinate-duplicate trail ID {coord_dup_id}"
+                            )
+
                             # Delete associated LiDAR files
-                            lidar_files = supabase.table("lidar_files").select("*").eq("trail_id", coord_dup_id).execute()
+                            lidar_files = (
+                                supabase.table("lidar_files")
+                                .select("*")
+                                .eq("trail_id", coord_dup_id)
+                                .execute()
+                            )
                             if lidar_files.data:
-                                print(f"   Deleting {len(lidar_files.data)} associated LiDAR file(s)")
+                                print(
+                                    f"   Deleting {len(lidar_files.data)} associated LiDAR file(s)"
+                                )
                                 for lidar_file in lidar_files.data:
-                                    supabase.table("lidar_files").delete().eq("id", lidar_file["id"]).execute()
-                            
+                                    db_client = (
+                                        supabase_service
+                                        if supabase_service
+                                        else supabase
+                                    )
+                                    db_client.table("lidar_files").delete().eq(
+                                        "id", lidar_file["id"]
+                                    ).execute()
+
                             # Delete the trail
-                            supabase.table("trails").delete().eq("id", coord_dup_id).execute()
+                            db_client = (
+                                supabase_service if supabase_service else supabase
+                            )
+                            db_client.table("trails").delete().eq(
+                                "id", coord_dup_id
+                            ).execute()
                             print(f"   ✅ Deleted coordinate-duplicate trail")
 
         # Create new trail data for Supabase
@@ -1678,7 +1724,7 @@ async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false"
             "elevation_change_total": int(round(elevation_gain + elevation_loss, 0)),
             # Store weather data in existing numeric fields, we'll interpret on frontend
             "weather_difficulty_multiplier": weather_score,  # Use existing column with new meaning
-            # Fixed technical difficulty calculation (1-10 scale)  
+            # Fixed technical difficulty calculation (1-10 scale)
             # Factors: max slope (40%), rolling hills (30%), avg slope (30%)
             # Properly normalized to produce 1-10 range
             "technical_rating": round(
@@ -1686,16 +1732,20 @@ async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false"
                     1.0,
                     min(
                         10.0,
-                        1 + (max_slope / 100) * 3.5  # Max slope: 0-100% -> 0-3.5 points
-                        + (min(rolling_hills_index / 50, 1.0) * 3.5)  # Rolling hills normalized: 0-50 -> 0-3.5 points  
-                        + (avg_slope / 30) * 2.0  # Avg slope: 0-30% -> 0-2 points
+                        1
+                        + (max_slope / 100) * 3.5  # Max slope: 0-100% -> 0-3.5 points
+                        + (
+                            min(rolling_hills_index / 50, 1.0) * 3.5
+                        )  # Rolling hills normalized: 0-50 -> 0-3.5 points
+                        + (avg_slope / 30) * 2.0,  # Avg slope: 0-30% -> 0-2 points
                     ),
                 ),
             ),
         }
 
-        # Insert trail into Supabase database
-        response = supabase.table("trails").insert(new_trail_data).execute()
+        # Insert trail into Supabase database (use service-role client if available to bypass RLS)
+        db_client = supabase_service if supabase_service else supabase
+        response = db_client.table("trails").insert(new_trail_data).execute()
 
         if response.data:
             inserted_trail = response.data[0]
@@ -1714,16 +1764,19 @@ async def upload_gpx(file: UploadFile = File(...), overwrite: str = Form("false"
         raise
     except Exception as e:
         import traceback
+
         error_details = traceback.format_exc()
         print(f"❌ Upload error: {type(e).__name__}: {e}")
         print(f"❌ Full traceback:\n{error_details}")
-        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e) or 'Unknown error'}")
+        raise HTTPException(
+            status_code=500, detail=f"{type(e).__name__}: {str(e) or 'Unknown error'}"
+        )
 
 
 @app.get("/trail/{trail_id}/3d-terrain-viewer")
 async def get_trail_3d_terrain_viewer(trail_id: int, elevation_source: str = "gpx"):
     """Serve interactive 3D terrain visualization as a standalone HTML page
-    
+
     Args:
         trail_id: Trail ID
         elevation_source: "gpx" (default) or "lidar" - determines which elevation data to use for trail overlay
@@ -1753,34 +1806,49 @@ async def get_trail_3d_terrain_viewer(trail_id: int, elevation_source: str = "gp
             try:
                 # Extract elevation profile from LiDAR
                 profile = lidar_extractor.extract_elevation_profile(
-                    trail_coords=coordinates,
-                    trail_id=trail_id
+                    trail_coords=coordinates, trail_id=trail_id
                 )
                 if profile and profile.get("success") and "elevations" in profile:
                     lidar_elevations = profile["elevations"]
-                    
+
                     # Align LiDAR elevations to GPX baseline (same as elevation profile chart)
                     elevation_profile = trail.get("elevation_profile", [])
                     if elevation_profile and len(elevation_profile) > 0:
                         # Get GPX elevations
                         if isinstance(elevation_profile[0], dict):
-                            gpx_elevations = [point.get("elevation") for point in elevation_profile]
+                            gpx_elevations = [
+                                point.get("elevation") for point in elevation_profile
+                            ]
                         else:
                             gpx_elevations = elevation_profile
-                        
-                        if gpx_elevations and len(gpx_elevations) > 0 and len(lidar_elevations) > 0:
+
+                        if (
+                            gpx_elevations
+                            and len(gpx_elevations) > 0
+                            and len(lidar_elevations) > 0
+                        ):
                             # Calculate offset based on starting elevations (always align)
                             gpx_start = gpx_elevations[0]
                             lidar_start = lidar_elevations[0]
                             elevation_offset = gpx_start - lidar_start
-                            
+
                             # Apply offset to align LiDAR to GPX baseline
-                            lidar_elevations = [e + elevation_offset for e in lidar_elevations]
-                            print(f"🔧 Aligned LiDAR elevations to GPX baseline: offset={elevation_offset:.1f}m")
-                            print(f"   Before: GPX={gpx_start:.1f}m, LiDAR={lidar_start:.1f}m (diff: {elevation_offset:.1f}m)")
-                            print(f"   After:  GPX={gpx_start:.1f}m, LiDAR={lidar_elevations[0]:.1f}m (aligned ✓)")
-                    
-                    print(f"📊 Using {len(lidar_elevations)} LiDAR elevation points for 3D visualization")
+                            lidar_elevations = [
+                                e + elevation_offset for e in lidar_elevations
+                            ]
+                            print(
+                                f"🔧 Aligned LiDAR elevations to GPX baseline: offset={elevation_offset:.1f}m"
+                            )
+                            print(
+                                f"   Before: GPX={gpx_start:.1f}m, LiDAR={lidar_start:.1f}m (diff: {elevation_offset:.1f}m)"
+                            )
+                            print(
+                                f"   After:  GPX={gpx_start:.1f}m, LiDAR={lidar_elevations[0]:.1f}m (aligned ✓)"
+                            )
+
+                    print(
+                        f"📊 Using {len(lidar_elevations)} LiDAR elevation points for 3D visualization"
+                    )
                 else:
                     print("⚠️  No LiDAR data available, falling back to GPX/DEM")
                     elevation_source = "gpx"
@@ -1790,8 +1858,11 @@ async def get_trail_3d_terrain_viewer(trail_id: int, elevation_source: str = "gp
 
         # Generate 3D visualization
         visualization_result = dem_analyzer.create_3d_terrain_visualization(
-            coordinates, buffer_meters=1000, elevation_source=elevation_source,
-            trail_id=trail_id, lidar_elevations=lidar_elevations
+            coordinates,
+            buffer_meters=1000,
+            elevation_source=elevation_source,
+            trail_id=trail_id,
+            lidar_elevations=lidar_elevations,
         )
 
         if not visualization_result.get("success"):
@@ -1926,7 +1997,7 @@ async def get_trail_dem_analysis(trail_id: int):
 @app.get("/trail/{trail_id}/3d-terrain")
 async def get_trail_3d_terrain(trail_id: int, elevation_source: str = "gpx"):
     """Generate interactive 3D terrain visualization for a trail
-    
+
     Args:
         trail_id: Trail ID
         elevation_source: "gpx" (default) or "lidar" - determines which elevation data to use for trail overlay
@@ -1954,34 +2025,49 @@ async def get_trail_3d_terrain(trail_id: int, elevation_source: str = "gpx"):
             try:
                 # Extract elevation profile from LiDAR
                 profile = lidar_extractor.extract_elevation_profile(
-                    trail_coords=coordinates,
-                    trail_id=trail_id
+                    trail_coords=coordinates, trail_id=trail_id
                 )
                 if profile and profile.get("success") and "elevations" in profile:
                     lidar_elevations = profile["elevations"]
-                    
+
                     # Align LiDAR elevations to GPX baseline (same as elevation profile chart)
                     elevation_profile = trail.get("elevation_profile", [])
                     if elevation_profile and len(elevation_profile) > 0:
                         # Get GPX elevations
                         if isinstance(elevation_profile[0], dict):
-                            gpx_elevations = [point.get("elevation") for point in elevation_profile]
+                            gpx_elevations = [
+                                point.get("elevation") for point in elevation_profile
+                            ]
                         else:
                             gpx_elevations = elevation_profile
-                        
-                        if gpx_elevations and len(gpx_elevations) > 0 and len(lidar_elevations) > 0:
+
+                        if (
+                            gpx_elevations
+                            and len(gpx_elevations) > 0
+                            and len(lidar_elevations) > 0
+                        ):
                             # Calculate offset based on starting elevations (always align)
                             gpx_start = gpx_elevations[0]
                             lidar_start = lidar_elevations[0]
                             elevation_offset = gpx_start - lidar_start
-                            
+
                             # Apply offset to align LiDAR to GPX baseline
-                            lidar_elevations = [e + elevation_offset for e in lidar_elevations]
-                            print(f"🔧 Aligned LiDAR elevations to GPX baseline: offset={elevation_offset:.1f}m")
-                            print(f"   Before: GPX={gpx_start:.1f}m, LiDAR={lidar_start:.1f}m (diff: {elevation_offset:.1f}m)")
-                            print(f"   After:  GPX={gpx_start:.1f}m, LiDAR={lidar_elevations[0]:.1f}m (aligned ✓)")
-                    
-                    print(f"📊 Using {len(lidar_elevations)} LiDAR elevation points for 3D visualization")
+                            lidar_elevations = [
+                                e + elevation_offset for e in lidar_elevations
+                            ]
+                            print(
+                                f"🔧 Aligned LiDAR elevations to GPX baseline: offset={elevation_offset:.1f}m"
+                            )
+                            print(
+                                f"   Before: GPX={gpx_start:.1f}m, LiDAR={lidar_start:.1f}m (diff: {elevation_offset:.1f}m)"
+                            )
+                            print(
+                                f"   After:  GPX={gpx_start:.1f}m, LiDAR={lidar_elevations[0]:.1f}m (aligned ✓)"
+                            )
+
+                    print(
+                        f"📊 Using {len(lidar_elevations)} LiDAR elevation points for 3D visualization"
+                    )
                 else:
                     print("⚠️  No LiDAR data available, falling back to GPX/DEM")
                     elevation_source = "gpx"
@@ -1991,8 +2077,11 @@ async def get_trail_3d_terrain(trail_id: int, elevation_source: str = "gpx"):
 
         # Generate 3D visualization
         visualization_result = dem_analyzer.create_3d_terrain_visualization(
-            coordinates, buffer_meters=1000, elevation_source=elevation_source, 
-            trail_id=trail_id, lidar_elevations=lidar_elevations
+            coordinates,
+            buffer_meters=1000,
+            elevation_source=elevation_source,
+            trail_id=trail_id,
+            lidar_elevations=lidar_elevations,
         )
 
         if not visualization_result.get("success"):
@@ -2281,6 +2370,185 @@ async def get_trail_elevation_sources(trail_id: int):
                 "coordinates": [],
             }
 
+        # 2b. XLSX Source - check for uploaded xlsx files linked to this trail
+        try:
+            xlsx_resp = (
+                supabase.table("xlsx_files")
+                .select("*")
+                .eq("trail_id", trail_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            xlsx_record = xlsx_resp.data[0] if xlsx_resp.data else None
+            if xlsx_record:
+                print(f"🔍 Found XLSX file for trail: {xlsx_record.get('filename')}")
+                xlsx_url = xlsx_record.get("file_url")
+                # Attempt to fetch and parse XLSX
+                try:
+                    import requests
+                    from openpyxl import load_workbook
+                    from io import BytesIO
+
+                    # If file_url is a supabase public_url object/dict, handle it
+                    if isinstance(xlsx_url, dict) and "publicURL" in xlsx_url:
+                        download_url = xlsx_url["publicURL"]
+                    elif isinstance(xlsx_url, str) and xlsx_url.startswith("http"):
+                        download_url = xlsx_url
+                    else:
+                        # Try to get public url via storage client
+                        download_url = supabase.storage.from_(
+                            "xlsx-files"
+                        ).get_public_url(xlsx_record.get("filename"))
+
+                    r = requests.get(download_url, timeout=15)
+                    if r.status_code == 200:
+                        wb = load_workbook(
+                            filename=BytesIO(r.content), read_only=True, data_only=True
+                        )
+                        sheet = wb[wb.sheetnames[0]]
+                        rows = list(sheet.iter_rows(values_only=True))
+                        wb.close()
+
+                        if rows and len(rows) > 1:
+                            headers_x = [
+                                str(h) if h is not None else "" for h in rows[0]
+                            ]
+                            # Try to locate distance and elevation columns
+                            lower = [h.lower() for h in headers_x]
+                            try:
+                                dist_idx = next(
+                                    i
+                                    for i, h in enumerate(lower)
+                                    if "dist" in h
+                                    or "chain" in h
+                                    or "length" in h
+                                    or "distance" in h
+                                )
+                            except StopIteration:
+                                dist_idx = None
+                            try:
+                                elev_idx = next(
+                                    i
+                                    for i, h in enumerate(lower)
+                                    if h == "z"
+                                    or "elev" in h
+                                    or "height" in h
+                                    or "alt" in h
+                                )
+                            except StopIteration:
+                                elev_idx = None
+
+                            xlsx_elevations = []
+                            xlsx_distances = []
+                            for row in rows[1:]:
+                                if dist_idx is not None and elev_idx is not None:
+                                    d = row[dist_idx]
+                                    z = row[elev_idx]
+                                else:
+                                    # Fallback: try common positions
+                                    d = row[1] if len(row) > 1 else None
+                                    z = row[2] if len(row) > 2 else None
+
+                                try:
+                                    dn = (
+                                        float(str(d).replace(",", ""))
+                                        if d is not None
+                                        else None
+                                    )
+                                    zn = (
+                                        float(str(z).replace(",", ""))
+                                        if z is not None
+                                        else None
+                                    )
+                                except Exception:
+                                    dn = None
+                                    zn = None
+                                if dn is not None and zn is not None:
+                                    xlsx_distances.append(
+                                        dn / 1000.0 if dn > 10 else dn
+                                    )  # if distances in meters convert to km heuristically
+                                    xlsx_elevations.append(zn)
+
+                            if xlsx_elevations:
+                                # If GPX is available and the XLSX starts at a very different elevation,
+                                # align the XLSX starting elevation to the GPX baseline (similar to LiDAR logic).
+                                note = f"Loaded sheet: {xlsx_record.get('sheet_name')}"
+                                try:
+                                    if sources.get("GPX", {}).get("available"):
+                                        gpx_elevs = sources["GPX"]["elevations"]
+                                        if (
+                                            gpx_elevs
+                                            and len(gpx_elevs) > 0
+                                            and len(xlsx_elevations) > 0
+                                        ):
+                                            gpx_start = gpx_elevs[0]
+                                            xlsx_start = xlsx_elevations[0]
+                                            elevation_offset = gpx_start - xlsx_start
+                                            # Only apply offset if the difference is significant (heuristic)
+                                            if abs(elevation_offset) >= 5.0:
+                                                xlsx_elevations = [
+                                                    e + elevation_offset
+                                                    for e in xlsx_elevations
+                                                ]
+                                                note += f" | Aligned to GPX baseline (offset: {elevation_offset:.1f}m)"
+                                                print(
+                                                    f"   🔧 Aligned XLSX elevations: offset={elevation_offset:.1f}m"
+                                                )
+                                                print(
+                                                    f"      GPX start: {gpx_start:.1f}m, XLSX start (adjusted): {xlsx_elevations[0]:.1f}m"
+                                                )
+                                except Exception as e:
+                                    print(f"⚠️ XLSX alignment warning: {e}")
+
+                                sources["XLSX"] = {
+                                    "available": True,
+                                    "elevations": xlsx_elevations,
+                                    "distances": xlsx_distances,
+                                    "coordinates": coordinates[: len(xlsx_elevations)],
+                                    "source": f"XLSX: {xlsx_record.get('original_filename')}",
+                                    "data_points": len(xlsx_elevations),
+                                    "note": note,
+                                }
+                            else:
+                                sources["XLSX"] = {
+                                    "available": False,
+                                    "error": "No numeric rows found",
+                                    "elevations": [],
+                                    "distances": [],
+                                }
+                    else:
+                        print(f"⚠️ Failed to download XLSX: HTTP {r.status_code}")
+                        sources["XLSX"] = {
+                            "available": False,
+                            "error": f"Failed to download XLSX (status {r.status_code})",
+                            "elevations": [],
+                            "distances": [],
+                        }
+                except Exception as e:
+                    print(f"XLSX parse error: {e}")
+                    sources["XLSX"] = {
+                        "available": False,
+                        "error": str(e),
+                        "elevations": [],
+                        "distances": [],
+                    }
+            else:
+                sources["XLSX"] = {
+                    "available": False,
+                    "error": "No XLSX file linked",
+                    "elevations": [],
+                    "distances": [],
+                }
+        except Exception as e:
+            print(f"XLSX lookup error: {e}")
+            sources["XLSX"] = {
+                "available": False,
+                "error": str(e),
+                "elevations": [],
+                "distances": [],
+            }
+
         # 3. QSpatial DEM Source
         if dem_analyzer:
             try:
@@ -2408,6 +2676,7 @@ async def get_trail_elevation_sources(trail_id: int):
                 ),
                 "gpx_available": sources["GPX"]["available"],
                 "lidar_available": sources["LiDAR"]["available"],
+                "xlsx_available": sources.get("XLSX", {}).get("available", False),
                 "qspatial_available": sources["QSpatial"]["available"],
                 "overall_available": sources["Overall"]["available"],
             },
@@ -2425,9 +2694,9 @@ async def get_trail_elevation_sources(trail_id: int):
 
 @app.post("/upload-lidar")
 async def upload_lidar_file(
-    file: UploadFile = File(...), 
+    file: UploadFile = File(...),
     trail_id: Optional[int] = Form(None),
-    overwrite: str = Form("false")  # Receive as string, convert to bool below
+    overwrite: str = Form("false"),  # Receive as string, convert to bool below
 ):
     """
     Upload a LiDAR .las/.laz file to Supabase Storage and store metadata in the database
@@ -2443,8 +2712,10 @@ async def upload_lidar_file(
         # Convert overwrite string to boolean
         print(f"📤 Uploading LiDAR file: {file.filename}")
         print(f"   Trail ID: {trail_id}")
-        print(f"   Raw overwrite value: '{overwrite}' (type: {type(overwrite).__name__})")
-        
+        print(
+            f"   Raw overwrite value: '{overwrite}' (type: {type(overwrite).__name__})"
+        )
+
         # Safety check for None or empty string
         if overwrite is None:
             overwrite_bool = False
@@ -2452,9 +2723,9 @@ async def upload_lidar_file(
             overwrite_bool = overwrite.lower() in ("true", "1", "yes")
         else:
             overwrite_bool = bool(overwrite)
-        
+
         print(f"   Converted to bool: {overwrite_bool}")
-        
+
         # Validate file extension
         if not (file.filename.endswith(".las") or file.filename.endswith(".laz")):
             raise HTTPException(
@@ -2466,7 +2737,7 @@ async def upload_lidar_file(
         print(f"📊 Reading file to check size...")
         content = await file.read()
         file_size_mb = len(content) / (1024 * 1024)
-        
+
         # Check if file is too large (>= 1GB)
         if file_size_mb >= 1024:
             raise HTTPException(
@@ -2474,9 +2745,11 @@ async def upload_lidar_file(
                 detail=f"File too large ({file_size_mb:.0f} MB). Files >= 1GB must be added using the add_local_lidar_to_db.py script. "
                 f"Run: python3 add_local_lidar_to_db.py 'path/to/{file.filename}' {trail_id or '<trail_id>'}",
             )
-        
+
         # Check if trail already has LiDAR file(s)
-        print(f"🔍 Checking trail LiDAR: trail_id={trail_id}, overwrite_bool={overwrite_bool}")
+        print(
+            f"🔍 Checking trail LiDAR: trail_id={trail_id}, overwrite_bool={overwrite_bool}"
+        )
         if trail_id and not overwrite_bool:
             existing_trail_lidar = (
                 supabase.table("lidar_files")
@@ -2484,7 +2757,9 @@ async def upload_lidar_file(
                 .eq("trail_id", trail_id)
                 .execute()
             )
-            print(f"🔍 Existing trail LiDAR check: {len(existing_trail_lidar.data) if existing_trail_lidar.data else 0} file(s) found")
+            print(
+                f"🔍 Existing trail LiDAR check: {len(existing_trail_lidar.data) if existing_trail_lidar.data else 0} file(s) found"
+            )
             if existing_trail_lidar.data:
                 print(f"⚠️  Trail already has LiDAR - raising 409 error")
                 raise HTTPException(
@@ -2515,17 +2790,26 @@ async def upload_lidar_file(
             else:
                 # Delete existing file(s) with same name
                 for existing_file in existing_check.data:
-                    print(f"🗑️  Overwrite mode: Deleting existing file ID {existing_file['id']}")
+                    print(
+                        f"🗑️  Overwrite mode: Deleting existing file ID {existing_file['id']}"
+                    )
                     try:
                         # Delete from storage
-                        if existing_file['file_url'] and not existing_file['file_url'].startswith("local://"):
-                            supabase.storage.from_("lidar-files").remove([existing_file['filename']])
+                        if existing_file["file_url"] and not existing_file[
+                            "file_url"
+                        ].startswith("local://"):
+                            supabase.storage.from_("lidar-files").remove(
+                                [existing_file["filename"]]
+                            )
                     except Exception as e:
                         print(f"   ⚠️  Could not delete from storage: {e}")
                     # Delete from database
-                    supabase.table("lidar_files").delete().eq("id", existing_file["id"]).execute()
+                    db_client = supabase_service if supabase_service else supabase
+                    db_client.table("lidar_files").delete().eq(
+                        "id", existing_file["id"]
+                    ).execute()
                     print(f"   ✅ Deleted existing file")
-        
+
         # If overwriting trail's LiDAR, delete existing trail LiDAR files
         if trail_id and overwrite_bool:
             existing_trail_lidar = (
@@ -2535,16 +2819,25 @@ async def upload_lidar_file(
                 .execute()
             )
             if existing_trail_lidar.data:
-                print(f"�️  Overwrite mode: Deleting {len(existing_trail_lidar.data)} existing LiDAR file(s) for trail {trail_id}")
+                print(
+                    f"�️  Overwrite mode: Deleting {len(existing_trail_lidar.data)} existing LiDAR file(s) for trail {trail_id}"
+                )
                 for lidar_file in existing_trail_lidar.data:
                     try:
                         # Delete from storage
-                        if lidar_file['file_url'] and not lidar_file['file_url'].startswith("local://"):
-                            supabase.storage.from_("lidar-files").remove([lidar_file['filename']])
+                        if lidar_file["file_url"] and not lidar_file[
+                            "file_url"
+                        ].startswith("local://"):
+                            supabase.storage.from_("lidar-files").remove(
+                                [lidar_file["filename"]]
+                            )
                     except Exception as e:
                         print(f"   ⚠️  Could not delete from storage: {e}")
                     # Delete from database
-                    supabase.table("lidar_files").delete().eq("id", lidar_file["id"]).execute()
+                    db_client = supabase_service if supabase_service else supabase
+                    db_client.table("lidar_files").delete().eq(
+                        "id", lidar_file["id"]
+                    ).execute()
                 print(f"   ✅ Deleted existing trail LiDAR files")
 
         # Generate unique filename to avoid conflicts in storage
@@ -2688,6 +2981,117 @@ async def upload_lidar_file(
                 print(f"⚠️  Could not clean up temp file: {cleanup_error}")
 
 
+@app.post("/upload-xlsx")
+async def upload_xlsx_file(
+    file: UploadFile = File(...),
+    trail_id: Optional[int] = Form(None),
+    overwrite: str = Form("false"),
+):
+    """
+    Upload an XLSX file to Supabase Storage and store metadata in the database
+    Expects a spreadsheet with columns including 'layer', 'distance', 'elevation'
+    """
+    temp_path = None
+    try:
+        print(f"📤 Uploading XLSX file: {file.filename}")
+        # Convert overwrite to bool
+        if overwrite is None:
+            overwrite_bool = False
+        elif isinstance(overwrite, str):
+            overwrite_bool = overwrite.lower() in ("true", "1", "yes")
+        else:
+            overwrite_bool = bool(overwrite)
+
+        # Validate extension
+        if not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
+            raise HTTPException(
+                status_code=400, detail="Invalid file type. Use .xlsx or .xls"
+            )
+
+        content = await file.read()
+        file_size_mb = len(content) / (1024 * 1024)
+
+        # Upload to Supabase Storage
+        timestamp = uuid.uuid4().hex[:8]
+        safe_filename = f"{timestamp}_{file.filename}"
+        try:
+            storage_response = supabase.storage.from_("xlsx-files").upload(
+                path=safe_filename,
+                file=content,
+                file_options={
+                    "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                },
+            )
+            print(f"✅ XLSX upload response: {storage_response}")
+        except Exception as e:
+            print(f"❌ XLSX storage upload failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+        file_url = supabase.storage.from_("xlsx-files").get_public_url(safe_filename)
+
+        # Save temporarily to inspect
+        temp_path = os.path.join(tempfile.gettempdir(), safe_filename)
+        with open(temp_path, "wb") as f:
+            f.write(content)
+
+        # Read sheet info and number of rows
+        try:
+            from openpyxl import load_workbook
+
+            wb = load_workbook(filename=temp_path, read_only=True, data_only=True)
+            sheet_name = wb.sheetnames[0] if wb.sheetnames else ""
+            ws = wb[sheet_name] if sheet_name else None
+            num_rows = 0
+            if ws:
+                for _ in ws.rows:
+                    num_rows += 1
+            else:
+                num_rows = 0
+            wb.close()
+        except Exception as e:
+            print(f"⚠️  Failed to read XLSX with openpyxl: {e}")
+            sheet_name = ""
+            num_rows = None
+
+        # Insert metadata into database
+        xlsx_record = {
+            "trail_id": trail_id,
+            "filename": safe_filename,
+            "original_filename": file.filename,
+            "file_url": file_url,
+            "file_size_mb": round(file_size_mb, 2),
+            "num_rows": num_rows,
+            "sheet_name": sheet_name,
+        }
+
+        try:
+            db_client = supabase_service if supabase_service else supabase
+            db_resp = db_client.table("xlsx_files").insert(xlsx_record).execute()
+            print(f"💾 XLSX metadata saved: {db_resp.data}")
+        except Exception as e:
+            print(f"❌ Failed to save XLSX metadata: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+        return {
+            "success": True,
+            "file_url": file_url,
+            "metadata": xlsx_record,
+            "db_record": db_resp.data,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ XLSX upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+
+
 @app.get("/lidar-files")
 async def get_lidar_files():
     """Get list of all LiDAR files from database"""
@@ -2780,27 +3184,33 @@ async def delete_trail(trail_id: int):
     """
     try:
         print(f"🔍 Looking up trail with ID: {trail_id}")
-        
+
         # Get trail info
-        trail_response = supabase.table("trails").select("*").eq("id", trail_id).execute()
+        trail_response = (
+            supabase.table("trails").select("*").eq("id", trail_id).execute()
+        )
         if not trail_response.data:
-            raise HTTPException(status_code=404, detail=f"Trail with ID {trail_id} not found")
-        
+            raise HTTPException(
+                status_code=404, detail=f"Trail with ID {trail_id} not found"
+            )
+
         trail = trail_response.data[0]
         trail_name = trail.get("name")
-        
+
         print(f"📂 Found trail: {trail_name}")
-        
+
         # Delete associated LiDAR files first
-        lidar_files = supabase.table("lidar_files").select("*").eq("trail_id", trail_id).execute()
+        lidar_files = (
+            supabase.table("lidar_files").select("*").eq("trail_id", trail_id).execute()
+        )
         deleted_lidar_count = 0
-        
+
         if lidar_files.data:
             print(f"🗑️  Deleting {len(lidar_files.data)} associated LiDAR file(s)")
             for lidar_file in lidar_files.data:
                 filename = lidar_file.get("filename")
                 file_url = lidar_file.get("file_url")
-                
+
                 # Delete from storage if not a local file
                 if file_url and not file_url.startswith("local://") and filename:
                     try:
@@ -2808,37 +3218,42 @@ async def delete_trail(trail_id: int):
                         print(f"   ✅ Deleted from storage: {filename}")
                     except Exception as e:
                         print(f"   ⚠️  Could not delete from storage: {filename} - {e}")
-                
+
                 # Delete from database
-                supabase.table("lidar_files").delete().eq("id", lidar_file["id"]).execute()
+                db_client = supabase_service if supabase_service else supabase
+                db_client.table("lidar_files").delete().eq(
+                    "id", lidar_file["id"]
+                ).execute()
                 deleted_lidar_count += 1
-            
+
             print(f"   ✅ Deleted {deleted_lidar_count} LiDAR file(s)")
-        
+
         # Delete the trail
         print(f"🗑️  Deleting trail: {trail_name}")
-        supabase.table("trails").delete().eq("id", trail_id).execute()
+        db_client = supabase_service if supabase_service else supabase
+        db_client.table("trails").delete().eq("id", trail_id).execute()
         print(f"✅ Trail deleted")
-        
+
         # Reinitialize LiDAR extractor if files were deleted
         if deleted_lidar_count > 0:
             global lidar_extractor
             if lidar_extractor:
                 lidar_extractor.lidar_files = lidar_extractor._find_lidar_files()
                 print(f"🔄 LiDAR extractor reinitialized")
-        
+
         return {
             "success": True,
             "message": f"Trail '{trail_name}' and {deleted_lidar_count} associated LiDAR file(s) deleted successfully",
             "deleted_trail": trail,
             "deleted_lidar_count": deleted_lidar_count,
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
         print(f"❌ Error deleting trail: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 

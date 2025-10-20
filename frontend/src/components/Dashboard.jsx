@@ -351,6 +351,15 @@ export default function Dashboard() {
   const [pendingLidarFile, setPendingLidarFile] = useState(null);
   const [selectedLidarTrailId, setSelectedLidarTrailId] = useState(null);
 
+  // XLSX upload (mirrors LiDAR flow: select file -> choose trail -> upload)
+  const [isUploadingXlsx, setIsUploadingXlsx] = useState(false);
+  const [xlsxUploadSuccess, setXlsxUploadSuccess] = useState(false);
+  const [showXlsxTrailSelector, setShowXlsxTrailSelector] = useState(false);
+  const [pendingXlsxFile, setPendingXlsxFile] = useState(null);
+  const [selectedXlsxTrailId, setSelectedXlsxTrailId] = useState(null);
+  const [showXlsxOverwriteDialog, setShowXlsxOverwriteDialog] = useState(false);
+  const [xlsxDuplicateError, setXlsxDuplicateError] = useState(null);
+
   // GPX overwrite dialog state
   const [showGpxOverwriteDialog, setShowGpxOverwriteDialog] = useState(false);
   const [pendingGpxFile, setPendingGpxFile] = useState(null);
@@ -915,10 +924,34 @@ export default function Dashboard() {
                 </Button>
               </div>
 
-              <Button onClick={loadTrails} variant="outline" size="sm">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh
-              </Button>
+              {/* XLSX Upload Button (select file -> choose trail -> upload) */}
+              <div className="relative ml-2">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  id="xlsx-upload"
+                  className="hidden"
+                  onChange={(e) => {
+                    // Step 1: select file, then open trail selector
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setPendingXlsxFile(file);
+                    setShowXlsxTrailSelector(true);
+                    // reset input
+                    e.target.value = null;
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById("xlsx-upload").click()}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload XLSX
+                </Button>
+              </div>
+
+              {/* Refresh button removed per UI cleanup request */}
 
               <Button
                 onClick={() => window.open("/measure", "_blank")}
@@ -1192,6 +1225,9 @@ export default function Dashboard() {
                                 QSpatial DEM
                               </SelectItem>
                             )}
+                            {elevationSources.sources?.XLSX?.available && (
+                              <SelectItem value="XLSX">XLSX</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1223,6 +1259,9 @@ export default function Dashboard() {
                       <span>Available:</span>
                       {elevationSources.summary.gpx_available && (
                         <span className="text-green-600">✓ GPX</span>
+                      )}
+                      {elevationSources.summary.xlsx_available && (
+                        <span className="text-green-600">✓ XLSX</span>
                       )}
                       {elevationSources.summary.lidar_available && (
                         <span className="text-green-600">✓ LiDAR</span>
@@ -2095,6 +2134,97 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* XLSX Overwrite Confirmation Dialog */}
+      {showXlsxOverwriteDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-orange-600 mb-2">
+                ⚠️ XLSX File Conflict
+              </h2>
+              <p className="text-sm text-gray-700 mb-4">{xlsxDuplicateError}</p>
+              <p className="text-sm font-medium text-gray-800 mb-2">
+                📁 File:{" "}
+                <span className="font-normal">{pendingXlsxFile?.name}</span>
+              </p>
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-orange-800 mb-2">
+                  Do you want to replace the existing XLSX file(s) for this
+                  trail?
+                </p>
+                <p className="text-xs text-orange-700">
+                  This will delete the old XLSX file(s) and upload the new one.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowXlsxOverwriteDialog(false);
+                    setPendingXlsxFile(null);
+                    setSelectedXlsxTrailId(null);
+                    setXlsxDuplicateError(null);
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    setShowXlsxOverwriteDialog(false);
+                    // call upload with overwrite true
+                    // reuse flow: set flag and call upload
+                    if (pendingXlsxFile && selectedXlsxTrailId) {
+                      // perform direct overwrite upload
+                      setIsUploadingXlsx(true);
+                      try {
+                        const formData = new FormData();
+                        formData.append("file", pendingXlsxFile);
+                        formData.append("trail_id", selectedXlsxTrailId);
+                        formData.append("overwrite", "true");
+
+                        const resp = await fetch(
+                          `${API_BASE_URL}/upload-xlsx`,
+                          {
+                            method: "POST",
+                            body: formData,
+                          }
+                        );
+                        const data = await resp.json();
+                        if (resp.ok && data.success) {
+                          setXlsxUploadSuccess(true);
+                          if (selectedTrail?.id === selectedXlsxTrailId) {
+                            loadElevationSources(selectedTrail.id);
+                          }
+                        } else {
+                          alert(
+                            `Overwrite failed: ${
+                              data.detail || data.error || JSON.stringify(data)
+                            }`
+                          );
+                        }
+                      } catch (err) {
+                        console.error("XLSX overwrite error:", err);
+                        alert(`Overwrite error: ${err.message}`);
+                      } finally {
+                        setIsUploadingXlsx(false);
+                        setPendingXlsxFile(null);
+                        setSelectedXlsxTrailId(null);
+                        setXlsxDuplicateError(null);
+                      }
+                    }
+                  }}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  Replace File
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* LiDAR File Size Warning Dialog */}
       {showLidarFileSizeWarning && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -2210,6 +2340,167 @@ export default function Dashboard() {
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
                 >
                   {isUploadingLidar ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* XLSX Trail Selection Dialog */}
+      {showXlsxTrailSelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                Select Trail for XLSX File
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Choose which trail this XLSX file belongs to:
+              </p>
+              <p className="text-sm font-medium text-gray-700 mb-4">
+                📁 File: {pendingXlsxFile?.name}
+              </p>
+
+              {/* Trail Selector */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Trail
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedXlsxTrailId || ""}
+                    onChange={(e) =>
+                      setSelectedXlsxTrailId(
+                        e.target.value ? parseInt(e.target.value) : null
+                      )
+                    }
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Select a trail...</option>
+                    {trails.map((trail) => (
+                      <option key={trail.id} value={trail.id}>
+                        {trail.name} ({trail.distance_km?.toFixed(2)} km,{" "}
+                        {trail.elevation_gain?.toFixed(0)}m gain)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => {
+                    setShowXlsxTrailSelector(false);
+                    setPendingXlsxFile(null);
+                    setSelectedXlsxTrailId(null);
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    // Step 2: Upload with selected trail
+                    if (!pendingXlsxFile || !selectedXlsxTrailId) {
+                      alert("Please select a trail first");
+                      return;
+                    }
+
+                    setIsUploadingXlsx(true);
+                    setShowXlsxTrailSelector(false);
+
+                    try {
+                      const formData = new FormData();
+                      formData.append("file", pendingXlsxFile);
+                      formData.append("trail_id", selectedXlsxTrailId);
+
+                      const resp = await fetch(`${API_BASE_URL}/upload-xlsx`, {
+                        method: "POST",
+                        body: formData,
+                      });
+
+                      let data = null;
+                      try {
+                        data = await resp.json();
+                      } catch (e) {
+                        console.error(
+                          "Failed to parse XLSX upload response",
+                          e
+                        );
+                        throw new Error("Invalid response from server");
+                      }
+
+                      if (resp.ok && data.success) {
+                        setXlsxUploadSuccess(true);
+                        setXlsxDuplicateError(null);
+
+                        // Reload elevation sources if viewing same trail
+                        if (selectedTrail?.id === selectedXlsxTrailId) {
+                          loadElevationSources(selectedTrail.id);
+                        }
+
+                        // Clear states
+                        setIsUploadingXlsx(false);
+                        setPendingXlsxFile(null);
+                        setSelectedXlsxTrailId(null);
+
+                        setTimeout(() => setXlsxUploadSuccess(false), 3000);
+                      } else {
+                        // Extract error message
+                        let errorMessage = "Unknown error";
+                        if (typeof data?.detail === "string") {
+                          errorMessage = data.detail;
+                        } else if (typeof data?.error === "string") {
+                          errorMessage = data.error;
+                        } else if (
+                          data?.detail &&
+                          typeof data.detail === "object"
+                        ) {
+                          errorMessage = JSON.stringify(data.detail);
+                        } else if (
+                          data?.error &&
+                          typeof data.error === "object"
+                        ) {
+                          errorMessage = JSON.stringify(data.error);
+                        }
+
+                        if (resp.status === 409) {
+                          setXlsxDuplicateError(errorMessage);
+                          setShowXlsxOverwriteDialog(true);
+                          setIsUploadingXlsx(false);
+                          return;
+                        } else {
+                          alert(`Upload failed: ${errorMessage}`);
+                          setIsUploadingXlsx(false);
+                          setPendingXlsxFile(null);
+                          setSelectedXlsxTrailId(null);
+                        }
+                      }
+                    } catch (err) {
+                      console.error("XLSX upload error:", err);
+                      alert(`Upload error: ${err.message}`);
+                      setIsUploadingXlsx(false);
+                      setPendingXlsxFile(null);
+                      setSelectedXlsxTrailId(null);
+                    }
+                  }}
+                  disabled={!selectedXlsxTrailId || isUploadingXlsx}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  {isUploadingXlsx ? (
                     <>
                       <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                       Uploading...
