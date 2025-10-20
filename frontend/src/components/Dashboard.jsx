@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import UnifiedUploadModal from "./UnifiedUploadModal";
 import {
   LineChart,
   Line,
@@ -359,6 +360,10 @@ export default function Dashboard() {
   const [selectedXlsxTrailId, setSelectedXlsxTrailId] = useState(null);
   const [showXlsxOverwriteDialog, setShowXlsxOverwriteDialog] = useState(false);
   const [xlsxDuplicateError, setXlsxDuplicateError] = useState(null);
+
+  // Unified Upload Modal
+  const [showUnifiedUpload, setShowUnifiedUpload] = useState(false);
+  const [isUploadingUnified, setIsUploadingUnified] = useState(false);
 
   // GPX overwrite dialog state
   const [showGpxOverwriteDialog, setShowGpxOverwriteDialog] = useState(false);
@@ -872,84 +877,18 @@ export default function Dashboard() {
                   }}
                 />
                 <Button
-                  variant="outline"
+                  onClick={() => setShowUnifiedUpload(true)}
+                  variant="default"
                   size="sm"
-                  disabled={isImporting || isProcessing || isDuplicate}
-                  className="inline-flex items-center"
-                  type="button"
-                  onClick={() => {
-                    document.getElementById("gpx-upload").click();
-                  }}
+                  disabled={isImporting || isProcessing}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {isImporting
-                    ? "Uploading..."
-                    : isProcessing
-                    ? "Processing..."
-                    : isDuplicate
-                    ? "Duplicate Trail!"
-                    : "Upload GPX"}
+                  Upload Trail Data
                 </Button>
               </div>
 
-              {/* LiDAR Upload Button */}
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".las,.laz"
-                  onChange={handleLidarFileSelect}
-                  id="lidar-upload"
-                  className="hidden"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isUploadingLidar}
-                  className={`inline-flex items-center ${
-                    lidarUploadSuccess
-                      ? "bg-green-100 border-green-500 text-green-700"
-                      : ""
-                  }`}
-                  type="button"
-                  onClick={() => {
-                    document.getElementById("lidar-upload").click();
-                  }}
-                >
-                  <Database className="w-4 h-4 mr-2" />
-                  {isUploadingLidar
-                    ? "Uploading LiDAR..."
-                    : lidarUploadSuccess
-                    ? "LiDAR Uploaded ✓"
-                    : "Upload LiDAR"}
-                </Button>
-              </div>
-
-              {/* XLSX Upload Button (select file -> choose trail -> upload) */}
-              <div className="relative ml-2">
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  id="xlsx-upload"
-                  className="hidden"
-                  onChange={(e) => {
-                    // Step 1: select file, then open trail selector
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    setPendingXlsxFile(file);
-                    setShowXlsxTrailSelector(true);
-                    // reset input
-                    e.target.value = null;
-                  }}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => document.getElementById("xlsx-upload").click()}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload XLSX
-                </Button>
-              </div>
+              {/* Legacy inputs removed - functionality moved to UnifiedUploadModal */}
 
               {/* Refresh button removed per UI cleanup request */}
 
@@ -2517,6 +2456,122 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Unified Upload Modal */}
+      <UnifiedUploadModal
+        isOpen={showUnifiedUpload}
+        onClose={() => setShowUnifiedUpload(false)}
+        trails={trails}
+        currentTrailId={selectedTrail?.id}
+        isUploading={isUploadingUnified}
+        onUploadGPX={async (file) => {
+          setIsUploadingUnified(true);
+          try {
+            // Use existing GPX upload logic - create mock event
+            const mockEvent = {
+              target: {
+                files: [file]
+              }
+            };
+            await handleGPXImport(mockEvent, false);
+          } finally {
+            setIsUploadingUnified(false);
+          }
+        }}
+        onUploadLiDAR={async (file, trailId) => {
+          setIsUploadingUnified(true);
+          try {
+            // Client-side size pre-check (1GB threshold)
+            const fileSizeMB = file.size / (1024 * 1024);
+            if (fileSizeMB >= 1024) {
+              // Surface the existing file-size warning dialog used elsewhere in the UI
+              setLidarFileSizeInfo({
+                filename: file.name,
+                sizeMB: fileSizeMB.toFixed(0),
+                sizeGB: (fileSizeMB / 1024).toFixed(2),
+                trailId: trailId,
+              });
+              setShowLidarFileSizeWarning(true);
+              // Ensure uploading flag is cleared and prevent modal auto-close by throwing
+              setIsUploadingUnified(false);
+              return; // Use return instead of throw to allow state updates
+            }
+
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("trail_id", trailId);
+
+            const resp = await fetch(`${API_BASE_URL}/upload-lidar`, {
+              method: "POST",
+              body: formData,
+            });
+
+            if (resp.ok) {
+              console.log("✅ LiDAR uploaded successfully");
+              await loadTrails(); // Refresh trails
+            } else {
+              // Try to parse JSON error body
+              let data = null;
+              try {
+                data = await resp.json();
+              } catch (e) {
+                data = { detail: `HTTP ${resp.status}` };
+              }
+
+              // Handle specific server-side cases to reuse existing UI flows
+              if (resp.status === 409) {
+                setLidarDuplicateError(data.detail || data.error || "Conflict detected");
+                setShowLidarOverwriteDialog(true);
+                setIsUploadingUnified(false);
+                // Keep modal open and stop normal success flow
+                return;
+              } else if (resp.status === 413) {
+                const detail = data.detail || data.error || JSON.stringify(data);
+                const match = detail.match(/Run: (.+)$/);
+                setLidarFileSizeInfo({
+                  filename: file.name,
+                  sizeMB: fileSizeMB.toFixed(0),
+                  command: match ? match[1] : null,
+                  errorMessage: detail,
+                  trailId: trailId,
+                });
+                setShowLidarFileSizeWarning(true);
+                setIsUploadingUnified(false);
+                // Prevent modal close by returning early instead of throwing
+                return;
+              } else {
+                throw new Error(data.detail || data.error || "LiDAR upload failed");
+              }
+            }
+          } finally {
+            setIsUploadingUnified(false);
+          }
+        }}
+        onUploadXLSX={async (file, trailId) => {
+          setIsUploadingUnified(true);
+          try {
+            // Use existing XLSX upload logic
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("trail_id", trailId);
+
+            const resp = await fetch(`${API_BASE_URL}/upload-xlsx`, {
+              method: "POST",
+              body: formData,
+            });
+
+            if (resp.ok) {
+              console.log("✅ XLSX uploaded successfully");
+              await loadTrails(); // Refresh trails
+            } else {
+              const data = await resp.json();
+              throw new Error(data.detail || "XLSX upload failed");
+            }
+          } finally {
+            setIsUploadingUnified(false);
+          }
+        }}
+      />
     </div>
   );
 }

@@ -20,9 +20,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 export default function InfoPage({ onClose }) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto"
+      onClick={onClose}
+    >
       <div className="min-h-screen px-4 py-8">
-        <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl">
+        <div 
+          className="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
             <div className="flex justify-between items-start">

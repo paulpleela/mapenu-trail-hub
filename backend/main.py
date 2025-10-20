@@ -2522,23 +2522,23 @@ async def get_trail_elevation_sources(trail_id: int):
                                     
                                     # Check if XLSX distance range is much larger than the trail
                                     max_xlsx_distance = max(xlsx_distances)
-                                    trail_distance = len(coordinates) * 0.01  # Rough estimate: 10m per coordinate
+                                    trail_distance = distances_km[-1] if distances_km else 0  # Use actual GPX trail distance
                                     
-                                    if max_xlsx_distance > trail_distance * 2:  # XLSX is more than 2x longer
-                                        print(f"   ⚠️ XLSX distance range ({max_xlsx_distance:.3f}km) much larger than trail (~{trail_distance:.3f}km)")
+                                    if max_xlsx_distance > trail_distance:  # XLSX extends beyond GPX trail
+                                        print(f"   ✂️ XLSX distance ({max_xlsx_distance:.3f}km) extends beyond GPX trail ({trail_distance:.3f}km) - truncating")
                                         print(f"   � Truncating XLSX data to match trail length")
                                         
                                         # Keep only XLSX points within reasonable trail distance
                                         filtered_data = []
                                         for dist, elev in zip(xlsx_distances, xlsx_elevations):
-                                            if dist <= trail_distance * 1.5:  # Allow 50% buffer
+                                            if dist <= trail_distance:
                                                 filtered_data.append((dist, elev))
                                         
                                         if filtered_data:
                                             xlsx_distances, xlsx_elevations = zip(*filtered_data)
                                             xlsx_distances = list(xlsx_distances)
                                             xlsx_elevations = list(xlsx_elevations)
-                                            print(f"   ✂️ Filtered to {len(xlsx_distances)} points within trail range")
+                                            print(f"   ✂️ Truncated to {len(xlsx_distances)} points within GPX trail distance")
                                     
                                     print(f"   📊 Final XLSX: {len(xlsx_distances)} points, range: {min(xlsx_distances):.3f}-{max(xlsx_distances):.3f}km")
                                     print(f"   📈 Elevation range: {min(xlsx_elevations):.1f}-{max(xlsx_elevations):.1f}m")
