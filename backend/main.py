@@ -2372,6 +2372,14 @@ async def get_trail_elevation_sources(trail_id: int):
 
         # 2b. XLSX Source - check for uploaded xlsx files linked to this trail
         try:
+            print(f"🔍 Looking for XLSX files for trail_id: {trail_id}")
+            
+            # Debug: Check all XLSX files to see what trail_ids exist
+            all_xlsx_resp = supabase.table("xlsx_files").select("id, trail_id, filename, original_filename").execute()
+            print(f"📋 All XLSX files in database: {len(all_xlsx_resp.data)} total")
+            for xlsx in all_xlsx_resp.data:
+                print(f"   - ID: {xlsx.get('id')}, trail_id: {xlsx.get('trail_id')}, file: {xlsx.get('original_filename', xlsx.get('filename'))}")
+            
             xlsx_resp = (
                 supabase.table("xlsx_files")
                 .select("*")
@@ -2380,6 +2388,7 @@ async def get_trail_elevation_sources(trail_id: int):
                 .limit(1)
                 .execute()
             )
+            print(f"📊 XLSX query result: {len(xlsx_resp.data)} files found")
             xlsx_record = xlsx_resp.data[0] if xlsx_resp.data else None
             if xlsx_record:
                 print(f"🔍 Found XLSX file for trail: {xlsx_record.get('filename')}")
@@ -2470,6 +2479,90 @@ async def get_trail_elevation_sources(trail_id: int):
                                     )  # if distances in meters convert to km heuristically
                                     xlsx_elevations.append(zn)
 
+                            # Sort data by distance to prevent jittery graphs
+                            if xlsx_elevations and xlsx_distances:
+                                # Combine distance and elevation pairs, sort by distance, then separate
+                                combined_data = list(zip(xlsx_distances, xlsx_elevations))
+                                combined_data.sort(key=lambda x: x[0])  # Sort by distance
+                                
+                                # Remove duplicates and ensure monotonic distance progression
+                                cleaned_data = []
+                                prev_distance = None
+                                tolerance = 0.001  # Minimum distance difference (1m for km units)
+                                
+                                for distance, elevation in combined_data:
+                                    # Only add if distance is significantly greater than previous
+                                    if prev_distance is None or distance > (prev_distance + tolerance):
+                                        cleaned_data.append((distance, elevation))
+                                        prev_distance = distance
+                                
+                                # Additional step: interpolate if we have large gaps
+                                if len(cleaned_data) > 1:
+                                    final_data = []
+                                    for i in range(len(cleaned_data)):
+                                        final_data.append(cleaned_data[i])
+                                        
+                                        # If there's a big gap to the next point, don't add interpolation
+                                        # This prevents creating artificial vertical lines
+                                        if i < len(cleaned_data) - 1:
+                                            curr_dist, curr_elev = cleaned_data[i]
+                                            next_dist, next_elev = cleaned_data[i + 1]
+                                            gap = next_dist - curr_dist
+                                            
+                                            # Only add points if gap is reasonable (not too large)
+                                            if gap > 0.1:  # If gap > 100m, it might cause visual issues
+                                                print(f"   ⚠️ Large distance gap detected: {gap:.3f}km between points")
+                                    
+                                    cleaned_data = final_data
+                                
+                                if cleaned_data:
+                                    xlsx_distances, xlsx_elevations = zip(*cleaned_data)
+                                    xlsx_distances = list(xlsx_distances)
+                                    xlsx_elevations = list(xlsx_elevations)
+                                    
+                                    # Check if XLSX distance range is much larger than the trail
+                                    max_xlsx_distance = max(xlsx_distances)
+                                    trail_distance = len(coordinates) * 0.01  # Rough estimate: 10m per coordinate
+                                    
+                                    if max_xlsx_distance > trail_distance * 2:  # XLSX is more than 2x longer
+                                        print(f"   ⚠️ XLSX distance range ({max_xlsx_distance:.3f}km) much larger than trail (~{trail_distance:.3f}km)")
+                                        print(f"   � Truncating XLSX data to match trail length")
+                                        
+                                        # Keep only XLSX points within reasonable trail distance
+                                        filtered_data = []
+                                        for dist, elev in zip(xlsx_distances, xlsx_elevations):
+                                            if dist <= trail_distance * 1.5:  # Allow 50% buffer
+                                                filtered_data.append((dist, elev))
+                                        
+                                        if filtered_data:
+                                            xlsx_distances, xlsx_elevations = zip(*filtered_data)
+                                            xlsx_distances = list(xlsx_distances)
+                                            xlsx_elevations = list(xlsx_elevations)
+                                            print(f"   ✂️ Filtered to {len(xlsx_distances)} points within trail range")
+                                    
+                                    print(f"   📊 Final XLSX: {len(xlsx_distances)} points, range: {min(xlsx_distances):.3f}-{max(xlsx_distances):.3f}km")
+                                    print(f"   📈 Elevation range: {min(xlsx_elevations):.1f}-{max(xlsx_elevations):.1f}m")
+                                    
+                                    # Final check: resample XLSX data to match trail coordinate count using interpolation
+                                    num_trail_coords = len(coordinates)
+                                    if len(xlsx_elevations) != num_trail_coords:
+                                        print(f"   🔄 Resampling XLSX from {len(xlsx_elevations)} to {num_trail_coords} points using interpolation")
+                                        
+                                        if len(xlsx_elevations) > 1:
+                                            import numpy as np
+                                            # Create indices that span the full XLSX data range
+                                            original_indices = np.arange(len(xlsx_elevations))
+                                            target_indices = np.linspace(0, len(xlsx_elevations) - 1, num_trail_coords)
+                                            
+                                            # Interpolate both distances and elevations
+                                            xlsx_distances = np.interp(target_indices, original_indices, xlsx_distances).tolist()
+                                            xlsx_elevations = np.interp(target_indices, original_indices, xlsx_elevations).tolist()
+                                            
+                                            print(f"   ✅ Resampled to {len(xlsx_elevations)} points, elevation range: {min(xlsx_elevations):.1f}-{max(xlsx_elevations):.1f}m")
+                                else:
+                                    xlsx_distances = []
+                                    xlsx_elevations = []
+
                             if xlsx_elevations:
                                 # If GPX is available and the XLSX starts at a very different elevation,
                                 # align the XLSX starting elevation to the GPX baseline (similar to LiDAR logic).
@@ -2534,6 +2627,7 @@ async def get_trail_elevation_sources(trail_id: int):
                         "distances": [],
                     }
             else:
+                print(f"⚠️ No XLSX file found for trail_id: {trail_id}")
                 sources["XLSX"] = {
                     "available": False,
                     "error": "No XLSX file linked",
