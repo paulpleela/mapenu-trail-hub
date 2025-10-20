@@ -24,20 +24,20 @@ export default function InfoPage({ onClose }) {
       className="fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto"
       onClick={onClose}
     >
-      <div className="min-h-screen px-4 py-8">
+      <div className="min-h-screen px-2 sm:px-4 py-4 sm:py-8">
         <div 
-          className="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl"
+          className="max-w-5xl mx-auto bg-white rounded-lg sm:rounded-2xl shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 sm:p-6 rounded-t-lg sm:rounded-t-2xl">
             <div className="flex justify-between items-start">
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <BookOpen className="w-8 h-8" />
-                  <h1 className="text-3xl font-bold">MAPENU Guide</h1>
+                <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                  <BookOpen className="w-6 h-6 sm:w-8 sm:h-8" />
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">MAPENU Guide</h1>
                 </div>
-                <p className="text-blue-100 text-lg">
+                <p className="text-blue-100 text-sm sm:text-base lg:text-lg">
                   Data Collection Methods & Platform Overview
                 </p>
               </div>

@@ -845,86 +845,94 @@ export default function Dashboard() {
       {/* Header */}
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
                 MAPENU Trail Hub
               </h1>
-              <p className="text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 Mapped Analysis Platform for Elevation and Navigation Utility
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-sm text-gray-600">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="text-xs sm:text-sm text-gray-600 order-last sm:order-first">
                 {trails.length} trail{trails.length !== 1 ? "s" : ""} available
               </div>
 
-              {/* GPX Import Button */}
-              <div className="relative">
-                <input
-                  type="file"
-                  accept=".gpx"
-                  onChange={handleGPXImport}
-                  className="hidden"
-                  id="gpx-upload"
-                  disabled={isImporting || isProcessing}
-                  ref={(input) => {
-                    if (input) {
-                      window.openFileDialog = () => {
-                        input.click();
-                      };
-                    }
-                  }}
-                />
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                {/* GPX Import Button */}
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".gpx"
+                    onChange={handleGPXImport}
+                    className="hidden"
+                    id="gpx-upload"
+                    disabled={isImporting || isProcessing}
+                    ref={(input) => {
+                      if (input) {
+                        window.openFileDialog = () => {
+                          input.click();
+                        };
+                      }
+                    }}
+                  />
+                  <Button
+                    onClick={() => setShowUnifiedUpload(true)}
+                    variant="default"
+                    size="sm"
+                    disabled={isImporting || isProcessing}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm"
+                  >
+                    <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Upload Trail Data</span>
+                    <span className="sm:hidden">Upload Data</span>
+                  </Button>
+                </div>
+
+                {/* Legacy inputs removed - functionality moved to UnifiedUploadModal */}
+
+                {/* Refresh button removed per UI cleanup request */}
+
                 <Button
-                  onClick={() => setShowUnifiedUpload(true)}
-                  variant="default"
+                  onClick={() => window.open("/measure", "_blank")}
+                  variant="outline"
                   size="sm"
-                  disabled={isImporting || isProcessing}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="text-xs sm:text-sm"
                 >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Trail Data
+                  <Ruler className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Measure GPX</span>
+                  <span className="sm:hidden">Measure</span>
+                </Button>
+
+                <Button
+                  onClick={() => setShowAnalytics(!showAnalytics)}
+                  variant={showAnalytics ? "default" : "outline"}
+                  size="sm"
+                  className="text-xs sm:text-sm"
+                >
+                  <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Analytics</span>
+                  <span className="sm:hidden">Stats</span>
+                </Button>
+
+                <Button
+                  onClick={() => setShowInfoPage(true)}
+                  variant="outline"
+                  size="sm"
+                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 text-xs sm:text-sm"
+                >
+                  <Info className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Help & Guide</span>
+                  <span className="sm:hidden">Help</span>
                 </Button>
               </div>
-
-              {/* Legacy inputs removed - functionality moved to UnifiedUploadModal */}
-
-              {/* Refresh button removed per UI cleanup request */}
-
-              <Button
-                onClick={() => window.open("/measure", "_blank")}
-                variant="outline"
-                size="sm"
-              >
-                <Ruler className="w-4 h-4 mr-2" />
-                Measure GPX
-              </Button>
-
-              <Button
-                onClick={() => setShowAnalytics(!showAnalytics)}
-                variant={showAnalytics ? "default" : "outline"}
-                size="sm"
-              >
-                <TrendingUp className="w-4 h-4 mr-2" />
-                Analytics
-              </Button>
-
-              <Button
-                onClick={() => setShowInfoPage(true)}
-                variant="outline"
-                size="sm"
-                className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
-              >
-                <Info className="w-4 h-4 mr-2" />
-                Help & Guide
-              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-4 space-y-4">
+      <div className="max-w-7xl mx-auto p-2 sm:p-4 space-y-4">
         {/* Analytics Dashboard */}
         {showAnalytics && analytics && (
           <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
@@ -1048,7 +1056,7 @@ export default function Dashboard() {
         {/* Bottom Half - Trail Details */}
         {selectedTrail ? (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Trail Info */}
               <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
                 <CardHeader className="pb-4">
@@ -1387,7 +1395,7 @@ export default function Dashboard() {
                   )}
 
                   <div className="mt-4"></div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                     <StatCard
                       icon={TrendingUp}
                       label="Elevation Gain"
@@ -1440,7 +1448,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                   <StatCard
                     icon={Ruler}
                     label="Distance"
@@ -1894,7 +1902,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {similarTrails.map((similar, index) => (
                   <div
                     key={similar.trail.id}
