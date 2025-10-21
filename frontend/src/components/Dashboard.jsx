@@ -846,13 +846,21 @@ export default function Dashboard() {
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-                MAPENU Trail Hub
-              </h1>
-              <p className="text-sm sm:text-base text-gray-600">
-                Mapped Analysis Platform for Elevation and Navigation Utility
-              </p>
+            <div className="flex items-center gap-3">
+              <img
+                src="/mapenu-logo.png"
+                alt="MAPENU Logo"
+                className="w-10 h-10 object-contain rounded-md shadow-sm border border-gray-200 bg-white"
+                style={{ background: 'white' }}
+              />
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                  MAPENU Trail Hub
+                </h1>
+                <p className="text-sm sm:text-base text-gray-600">
+                  Mapped Analysis Platform for Elevation and Navigation Utility
+                </p>
+              </div>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
               <div className="text-xs sm:text-sm text-gray-600 order-last sm:order-first">
@@ -1253,11 +1261,10 @@ export default function Dashboard() {
                                 return sourceData.elevations.map(
                                   (elev, idx) => ({
                                     distance:
-                                      sourceData.distances[idx]?.toFixed(2) ||
-                                      0,
-                                    elevation: parseFloat(elev.toFixed(2)),
+                                      parseFloat(sourceData.distances[idx]) || 0,
+                                    elevation: parseFloat(elev),
                                     slope:
-                                      sourceData.slopes?.[idx]?.toFixed(2) || 0,
+                                      sourceData.slopes?.[idx] || 0,
                                   })
                                 );
                               })()}
@@ -1268,6 +1275,8 @@ export default function Dashboard() {
                               />
                               <XAxis
                                 dataKey="distance"
+                                type="number"
+                                domain={['dataMin', 'dataMax']}
                                 label={{
                                   value: "Distance (km)",
                                   position: "insideBottom",
@@ -1361,31 +1370,6 @@ export default function Dashboard() {
                                   />
                                 </linearGradient>
                               </defs>
-                              {/* Min/Max elevation reference lines */}
-                              {selectedTrail?.max_elevation && (
-                                <Line
-                                  yAxisId="left"
-                                  type="step"
-                                  dataKey={() => selectedTrail.max_elevation}
-                                  stroke="#ef4444"
-                                  strokeDasharray="8 4"
-                                  strokeWidth={2}
-                                  dot={false}
-                                  name="Max Elevation"
-                                />
-                              )}
-                              {selectedTrail?.min_elevation && (
-                                <Line
-                                  yAxisId="left"
-                                  type="step"
-                                  dataKey={() => selectedTrail.min_elevation}
-                                  stroke="#22c55e"
-                                  strokeDasharray="8 4"
-                                  strokeWidth={2}
-                                  dot={false}
-                                  name="Min Elevation"
-                                />
-                              )}
                             </AreaChart>
                           </ResponsiveContainer>
                         </div>
