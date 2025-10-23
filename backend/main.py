@@ -2045,46 +2045,14 @@ async def get_trail_3d_terrain(trail_id: int, elevation_source: str = "gpx"):
                     trail_coords=coordinates, trail_id=trail_id
                 )
                 if profile and profile.get("success") and "elevations" in profile:
+                    # For 3D visualization, we need RAW LiDAR elevations (not GPX-aligned)
+                    # because they need to match the DEM terrain surface
                     lidar_elevations = profile["elevations"]
-
-                    # Align LiDAR elevations to GPX baseline (same as elevation profile chart)
-                    elevation_profile = trail.get("elevation_profile", [])
-                    if elevation_profile and len(elevation_profile) > 0:
-                        # Get GPX elevations
-                        if isinstance(elevation_profile[0], dict):
-                            gpx_elevations = [
-                                point.get("elevation") for point in elevation_profile
-                            ]
-                        else:
-                            gpx_elevations = elevation_profile
-
-                        if (
-                            gpx_elevations
-                            and len(gpx_elevations) > 0
-                            and len(lidar_elevations) > 0
-                        ):
-                            # Calculate offset based on starting elevations (always align)
-                            gpx_start = gpx_elevations[0]
-                            lidar_start = lidar_elevations[0]
-                            elevation_offset = gpx_start - lidar_start
-
-                            # Apply offset to align LiDAR to GPX baseline
-                            lidar_elevations = [
-                                e + elevation_offset for e in lidar_elevations
-                            ]
-                            print(
-                                f"🔧 Aligned LiDAR elevations to GPX baseline: offset={elevation_offset:.1f}m"
-                            )
-                            print(
-                                f"   Before: GPX={gpx_start:.1f}m, LiDAR={lidar_start:.1f}m (diff: {elevation_offset:.1f}m)"
-                            )
-                            print(
-                                f"   After:  GPX={gpx_start:.1f}m, LiDAR={lidar_elevations[0]:.1f}m (aligned ✓)"
-                            )
-
+                    
                     print(
-                        f"📊 Using {len(lidar_elevations)} LiDAR elevation points for 3D visualization"
+                        f"📊 Using {len(lidar_elevations)} RAW LiDAR elevation points for 3D visualization (no GPX alignment)"
                     )
+                    print(f"   LiDAR elevation range: {min(lidar_elevations):.1f}m - {max(lidar_elevations):.1f}m")
                 else:
                     print("⚠️  No LiDAR data available, falling back to GPX/DEM")
                     elevation_source = "gpx"

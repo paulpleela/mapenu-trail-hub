@@ -302,6 +302,9 @@ class RealDEMAnalyzer:
                         f"Processing {len(sampled_coords)} trail points from {total_points} total points (interval: {sample_interval}) using {source_name} elevations..."
                     )
 
+                    if using_lidar:
+                        print(f"   Note: Using DEM elevations for trail path to ensure proper alignment with terrain surface")
+
                     for i, (x, y) in enumerate(sampled_coords):
                         try:
                             # Convert world coordinates to windowed pixel coordinates
@@ -315,29 +318,21 @@ class RealDEMAnalyzer:
                                 0 <= windowed_row < elevation_data.shape[0]
                                 and 0 <= windowed_col < elevation_data.shape[1]
                             ):
-                                # Get elevation from LiDAR if available, otherwise from DEM
-                                if using_lidar:
-                                    # Sample from LiDAR elevations (interpolate if needed)
-                                    original_idx = i * sample_interval
-                                    if original_idx < len(lidar_elevations):
-                                        z = lidar_elevations[original_idx]
-                                    else:
-                                        # Fallback to DEM if out of range
-                                        z = elevation_data[windowed_row, windowed_col]
-                                else:
-                                    z = elevation_data[windowed_row, windowed_col]
+                                # ALWAYS use DEM elevation for the trail path to ensure it sits on terrain
+                                # (Even when "LiDAR" source is selected - this is just for visual consistency)
+                                z = elevation_data[windowed_row, windowed_col]
 
                                 if z != dataset.nodata and not (
                                     isinstance(z, float) and np.isnan(z)
                                 ):
                                     trail_x.append(windowed_col)
                                     trail_y.append(windowed_row)
-                                    # Use smaller offset for LiDAR (0.5m) since it's more accurate, 1m for DEM
-                                    elevation_offset = 0.5 if using_lidar else 1.0
+                                    # Add small visual offset above terrain surface
+                                    elevation_offset = 1.0
                                     trail_z.append(z + elevation_offset)
                                     if i < 5:  # Only print first few for debugging
                                         print(
-                                            f"Added trail point {i}: ({windowed_col}, {windowed_row}, {z:.1f}m + {elevation_offset}m offset) from {source_name}"
+                                            f"Added trail point {i}: ({windowed_col}, {windowed_row}, {z:.1f}m + {elevation_offset}m offset = {z + elevation_offset:.1f}m) from DEM"
                                         )
                                 else:
                                     print(f"Trail point {i}: No data value")
@@ -405,9 +400,10 @@ class RealDEMAnalyzer:
                         )
 
                     # Update layout for better interaction
+                    elevation_source_label = "LiDAR Elevations" if using_lidar else "DEM Elevations"
                     fig.update_layout(
                         title={
-                            "text": "Trail-Focused 3D Terrain (Exact Trail Bounds)",
+                            "text": f"3D Terrain Visualization - Trail with {elevation_source_label}",
                             "x": 0.5,
                             "xanchor": "center",
                         },
