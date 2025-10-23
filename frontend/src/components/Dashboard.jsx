@@ -806,6 +806,84 @@ export default function Dashboard() {
     setSelectedLidarTrailId(null);
   };
 
+  // Calculate metrics from selected elevation source
+  const calculateMetricsFromSource = () => {
+    // Default to trail metrics if Overall or no source selected
+    if (!selectedElevationSource || selectedElevationSource === "Overall" || !elevationSources?.sources?.[selectedElevationSource]) {
+      return {
+        elevation_gain: selectedTrail?.elevation_gain,
+        elevation_loss: selectedTrail?.elevation_loss,
+        min_elevation: selectedTrail?.min_elevation,
+        max_elevation: selectedTrail?.max_elevation,
+        avg_slope: selectedTrail?.avg_slope,
+        max_slope: selectedTrail?.max_slope,
+      };
+    }
+
+    const sourceData = elevationSources.sources[selectedElevationSource];
+    if (!sourceData?.available || !sourceData.elevations?.length) {
+      return {
+        elevation_gain: selectedTrail?.elevation_gain,
+        elevation_loss: selectedTrail?.elevation_loss,
+        min_elevation: selectedTrail?.min_elevation,
+        max_elevation: selectedTrail?.max_elevation,
+        avg_slope: selectedTrail?.avg_slope,
+        max_slope: selectedTrail?.max_slope,
+      };
+    }
+
+    // Calculate metrics from the selected source
+    const elevations = sourceData.elevations.map(e => parseFloat(e)).filter(e => Number.isFinite(e));
+    const distances = sourceData.distances.map(d => parseFloat(d)).filter(d => Number.isFinite(d));
+    const slopes = sourceData.slopes?.map(s => parseFloat(s)).filter(s => Number.isFinite(s)) || [];
+
+    if (elevations.length === 0) {
+      return {
+        elevation_gain: selectedTrail?.elevation_gain,
+        elevation_loss: selectedTrail?.elevation_loss,
+        min_elevation: selectedTrail?.min_elevation,
+        max_elevation: selectedTrail?.max_elevation,
+        avg_slope: selectedTrail?.avg_slope,
+        max_slope: selectedTrail?.max_slope,
+      };
+    }
+
+    // Calculate elevation gain and loss
+    let gain = 0;
+    let loss = 0;
+    for (let i = 1; i < elevations.length; i++) {
+      const diff = elevations[i] - elevations[i - 1];
+      if (diff > 0) {
+        gain += diff;
+      } else {
+        loss += Math.abs(diff);
+      }
+    }
+
+    // Calculate min/max elevation
+    const minElev = Math.min(...elevations);
+    const maxElev = Math.max(...elevations);
+
+    // Calculate average and max slope
+    let avgSlope = 0;
+    let maxSlope = 0;
+    if (slopes.length > 0) {
+      avgSlope = slopes.reduce((a, b) => a + b, 0) / slopes.length;
+      maxSlope = Math.max(...slopes);
+    }
+
+    return {
+      elevation_gain: Math.round(gain),
+      elevation_loss: Math.round(loss),
+      min_elevation: Math.round(minElev),
+      max_elevation: Math.round(maxElev),
+      avg_slope: avgSlope,
+      max_slope: maxSlope,
+    };
+  };
+
+  const sourceMetrics = calculateMetricsFromSource();
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1408,34 +1486,34 @@ export default function Dashboard() {
                     <StatCard
                       icon={TrendingUp}
                       label="Elevation Gain"
-                      value={selectedTrail?.elevation_gain}
+                      value={sourceMetrics.elevation_gain}
                       unit="m"
                       tooltip="Total upward elevation change throughout the trail"
                     />
                     <StatCard
                       icon={TrendingUp}
                       label="Elevation Loss"
-                      value={selectedTrail?.elevation_loss}
+                      value={sourceMetrics.elevation_loss}
                       unit="m"
                       tooltip="Total downward elevation change throughout the trail"
                     />
                     <StatCard
                       icon={Mountain}
                       label="Elevation Range"
-                      value={`${selectedTrail?.min_elevation}m - ${selectedTrail?.max_elevation}m`}
+                      value={`${sourceMetrics.min_elevation}m - ${sourceMetrics.max_elevation}m`}
                       unit=""
                       description={`${
-                        selectedTrail?.max_elevation -
-                        selectedTrail?.min_elevation
+                        sourceMetrics.max_elevation -
+                        sourceMetrics.min_elevation
                       }m span`}
                       tooltip="Minimum to maximum elevation with total elevation span"
                     />
                     <StatCard
                       icon={Gauge}
                       label="Slope Range"
-                      value={`${selectedTrail?.avg_slope?.toFixed(1)}% avg`}
+                      value={`${sourceMetrics.avg_slope?.toFixed(1)}% avg`}
                       unit=""
-                      description={`${selectedTrail?.max_slope?.toFixed(
+                      description={`${sourceMetrics.max_slope?.toFixed(
                         1
                       )}% max`}
                       tooltip="Average slope with maximum slope encountered - yellow line shows slope variation"
