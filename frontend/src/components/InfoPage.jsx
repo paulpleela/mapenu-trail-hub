@@ -849,8 +849,7 @@ export default function InfoPage({ onClose }) {
                       Record Your Trail
                     </p>
                     <p className="text-sm text-gray-600">
-                      Use GPS Tracks or My Tracks app to record your hike as a
-                      GPX file
+                      Use a GPS tracking app (GPS Tracks for iOS, My Tracks for Android) to record your hike as a GPX file
                     </p>
                   </div>
                 </li>
@@ -863,7 +862,7 @@ export default function InfoPage({ onClose }) {
                       Upload to MAPENU
                     </p>
                     <p className="text-sm text-gray-600">
-                      Click the "Import GPX" button and select your trail file
+                      Click "Upload" button in the header → Select "GPX Track" → Choose your trail file → Name your trail
                     </p>
                   </div>
                 </li>
@@ -872,14 +871,60 @@ export default function InfoPage({ onClose }) {
                     3
                   </span>
                   <div>
-                    <p className="font-semibold text-gray-800">View Analysis</p>
+                    <p className="font-semibold text-gray-800">View Elevation Profile</p>
                     <p className="text-sm text-gray-600">
-                      Explore rolling hills metrics, elevation profiles, 3D
-                      terrain, and difficulty ratings
+                      Select your trail from the list → Click on "Elevation Profile" tab to see elevation charts with multiple data sources (GPX, LiDAR, QSpatial, XLSX)
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    4
+                  </span>
+                  <div>
+                    <p className="font-semibold text-gray-800">Explore Trail Analysis</p>
+                    <p className="text-sm text-gray-600">
+                      View rolling hills metrics, difficulty ratings, elevation gain/loss, slope analysis, and estimated completion time
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    5
+                  </span>
+                  <div>
+                    <p className="font-semibold text-gray-800">View 3D Terrain (Optional)</p>
+                    <p className="text-sm text-gray-600">
+                      Click "Real-Time DEM Analysis" to see interactive 3D terrain visualization with your trail path overlaid on actual elevation data
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-indigo-600 text-white rounded-full flex items-center justify-center font-bold">
+                    6
+                  </span>
+                  <div>
+                    <p className="font-semibold text-gray-800">Add Additional Data (Optional)</p>
+                    <p className="text-sm text-gray-600">
+                      Upload LiDAR scans (.las/.laz) or XLSX elevation profiles for the same trail to compare different data sources using the elevation source dropdown
                     </p>
                   </div>
                 </li>
               </ol>
+              
+              <div className="mt-6 bg-white rounded-lg p-4 border-2 border-indigo-200">
+                <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                  <Info className="w-5 h-5 text-indigo-600" />
+                  Pro Tips:
+                </h3>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Use the elevation source dropdown to compare GPX vs LiDAR vs QSpatial vs XLSX data</li>
+                  <li>• Metrics (elevation gain, loss, slope) update dynamically based on selected source</li>
+                  <li>• Click the refresh icon in DEM Analysis to reload 3D terrain visualization</li>
+                  <li>• Use "Find Similar" to discover trails with comparable difficulty and terrain</li>
+                  <li>• Check "Measure GPX" tool to analyze GPX files without uploading them</li>
+                </ul>
+              </div>
             </section>
           </div>
 
