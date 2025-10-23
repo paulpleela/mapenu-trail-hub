@@ -1257,16 +1257,35 @@ export default function Dashboard() {
                                   return selectedTrail?.elevation_profile || [];
                                 }
 
-                                // Convert to chart format
-                                return sourceData.elevations.map(
-                                  (elev, idx) => ({
-                                    distance:
-                                      parseFloat(sourceData.distances[idx]) || 0,
-                                    elevation: parseFloat(elev),
-                                    slope:
-                                      sourceData.slopes?.[idx] || 0,
-                                  })
+                                // Convert to chart format with proper numerical handling
+                                // Backend now handles alignment to GPX baseline
+                                const chartData = sourceData.elevations.map(
+                                  (elev, idx) => {
+                                    const distance = parseFloat(sourceData.distances[idx]);
+                                    const elevation = parseFloat(elev);
+                                    const slope = parseFloat(sourceData.slopes?.[idx]) || 0;
+                                    
+                                    // Validate that values are finite numbers
+                                    return {
+                                      distance: Number.isFinite(distance) ? distance : 0,
+                                      elevation: Number.isFinite(elevation) ? elevation : 0,
+                                      slope: Number.isFinite(slope) ? slope : 0,
+                                    };
+                                  }
+                                ).filter(point => 
+                                  // Filter out invalid data points
+                                  Number.isFinite(point.distance) && 
+                                  Number.isFinite(point.elevation) &&
+                                  point.elevation > -1000 && // Reasonable elevation bounds
+                                  point.elevation < 10000
                                 );
+                                
+                                // Sort by distance for XLSX to prevent line artifacts
+                                if (selectedElevationSource === 'XLSX') {
+                                  chartData.sort((a, b) => a.distance - b.distance);
+                                }
+                                
+                                return chartData;
                               })()}
                             >
                               <CartesianGrid
@@ -1277,6 +1296,7 @@ export default function Dashboard() {
                                 dataKey="distance"
                                 type="number"
                                 domain={['dataMin', 'dataMax']}
+                                tickFormatter={(value) => value.toFixed(2)}
                                 label={{
                                   value: "Distance (km)",
                                   position: "insideBottom",
@@ -1287,6 +1307,9 @@ export default function Dashboard() {
                               />
                               <YAxis
                                 yAxisId="left"
+                                type="number"
+                                domain={['dataMin', 'dataMax']}
+                                tickFormatter={(value) => Math.round(value)}
                                 label={{
                                   value: "Elevation (m)",
                                   angle: -90,
@@ -1298,6 +1321,8 @@ export default function Dashboard() {
                               <YAxis
                                 yAxisId="right"
                                 orientation="right"
+                                type="number"
+                                domain={['auto', 'auto']}
                                 label={{
                                   value: "Slope (%)",
                                   angle: 90,
