@@ -849,7 +849,7 @@ export default function InfoPage({ onClose }) {
                       Record Your Trail
                     </p>
                     <p className="text-sm text-gray-600">
-                      Use a GPS tracking app (GPS Tracks for iOS, My Tracks for Android) to record your hike as a GPX file
+                      Use a GPS tracking app or the built-in <a href="/measure" target="_blank" className="text-blue-500">MAPENU GPX Tracker</a> to record your hike as a GPX file
                     </p>
                   </div>
                 </li>
@@ -862,7 +862,7 @@ export default function InfoPage({ onClose }) {
                       Upload to MAPENU
                     </p>
                     <p className="text-sm text-gray-600">
-                      Click "Upload" button in the header → Select "GPX Track" → Choose your trail file → Name your trail
+                      Click "Upload Trail Data" button in the header → Select "New Trail (GPX)" → Choose your trail file → Name your trail
                     </p>
                   </div>
                 </li>
@@ -873,7 +873,7 @@ export default function InfoPage({ onClose }) {
                   <div>
                     <p className="font-semibold text-gray-800">View Elevation Profile</p>
                     <p className="text-sm text-gray-600">
-                      Select your trail from the list → Click on "Elevation Profile" tab to see elevation charts with multiple data sources (GPX, LiDAR, QSpatial, XLSX)
+                      Select your trail from the list → Check the "Elevation Profile" tab to see elevation charts with multiple data sources (if available)
                     </p>
                   </div>
                 </li>
@@ -893,9 +893,9 @@ export default function InfoPage({ onClose }) {
                     5
                   </span>
                   <div>
-                    <p className="font-semibold text-gray-800">View 3D Terrain (Optional)</p>
+                    <p className="font-semibold text-gray-800">View 3D Terrain</p>
                     <p className="text-sm text-gray-600">
-                      Click "Real-Time DEM Analysis" to see interactive 3D terrain visualization with your trail path overlaid on actual elevation data
+                      Check "Real-Time DEM Analysis" to see interactive 3D terrain visualization with your trail path overlaid on actual elevation data
                     </p>
                   </div>
                 </li>
@@ -904,9 +904,9 @@ export default function InfoPage({ onClose }) {
                     6
                   </span>
                   <div>
-                    <p className="font-semibold text-gray-800">Add Additional Data (Optional)</p>
+                    <p className="font-semibold text-gray-800">Add Additional Data (Enhance Analysis)</p>
                     <p className="text-sm text-gray-600">
-                      Upload LiDAR scans (.las/.laz) or XLSX elevation profiles for the same trail to compare different data sources using the elevation source dropdown
+                      Click the "Upload Trail Data" button → Select "LiDAR Data" (.las/.laz) or "Elevation Profile" (.xlsx) to upload → Select an existing trail to enhance with this new data. Compare different data sources using the elevation source dropdown.
                     </p>
                   </div>
                 </li>
@@ -922,7 +922,6 @@ export default function InfoPage({ onClose }) {
                   <li>• Metrics (elevation gain, loss, slope) update dynamically based on selected source</li>
                   <li>• Click the refresh icon in DEM Analysis to reload 3D terrain visualization</li>
                   <li>• Use "Find Similar" to discover trails with comparable difficulty and terrain</li>
-                  <li>• Check "Measure GPX" tool to analyze GPX files without uploading them</li>
                 </ul>
               </div>
             </section>
