@@ -956,6 +956,23 @@ async def get_trails():
     try:
         response = supabase.table("trails").select("*").execute()
         trails = response.data
+        
+        # Fix any incorrect difficulty_level based on difficulty_score
+        for trail in trails:
+            score = trail.get("difficulty_score", 0)
+            if score <= 3:
+                correct_level = "Easy"
+            elif score <= 6:
+                correct_level = "Moderate"
+            elif score <= 8:
+                correct_level = "Hard"
+            else:
+                correct_level = "Extreme"
+            
+            # Update if mismatch
+            if trail.get("difficulty_level") != correct_level:
+                trail["difficulty_level"] = correct_level
+        
         return {"success": True, "trails": trails}
     except Exception as e:
         print(f"Database error: {e}")
