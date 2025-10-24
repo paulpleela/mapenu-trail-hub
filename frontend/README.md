@@ -21,7 +21,8 @@ MAPENU enables users to analyze, visualize, and share trail data using geospatia
 - **📚 User Guide & Analytics**: Access help, best practices, and analytics dashboards.
 - **🛰️ Built-in GPX Tracker**: Record and export GPX tracks directly from the platform.
 
-**PLACEHOLDER: Example website screenshot here**
+<img width="1512" height="821" alt="image" src="https://github.com/user-attachments/assets/58aeaed2-ea8c-4ef3-a6cc-ec15c1bafb40" />
+
 
 ---
 
