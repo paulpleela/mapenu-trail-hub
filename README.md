@@ -54,6 +54,17 @@ pip install -r requirements.txt
 python main.py
 ```
 
+External Data Files & Datasets Required Data Files DEM/GeoTIFF Files
+- QSpatial Queensland Government .tif (GeoTIFF) files placed in backend/dem_data/ 
+- Example: brisbane_dem_1m.tif (1-meter resolution Digital Elevation Model) 
+- Request files from: https://elevation.fsdf.org.au/ bounding areas of interest (Mt Coot-Tha)
+
+Example Trail Datasets (Provided)
+- GPX files: backend/example_data/sample_trails/.gpx 
+- LiDAR files: backend/example_data/.las or .laz 
+- XLSX profiles: backend/example_data/.xlsx 
+
+
 ### Frontend Setup
 
 ```bash
