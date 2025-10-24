@@ -8,7 +8,9 @@ A modern, innovative platform for trail analysis, visualization, and certificati
 
 MAPENU enables users to upload, analyze, and visualize trail elevation data from GPX, LiDAR, and DTM sources. The system detects and classifies rolling hills, validates results on real-world trails, and presents intuitive visual outputs for decision-making and certification.
 
-<img width="512" height="512" alt="mapenu-logo" src="https://github.com/user-attachments/assets/f7894f0c-149f-46b4-8cc5-31fe31c7a394" />
+<p align="center">
+  <img width="512" height="512" alt="mapenu-logo" src="https://github.com/user-attachments/assets/f7894f0c-149f-46b4-8cc5-31fe31c7a394" />
+</p>
 
 
 ---
@@ -69,7 +71,7 @@ npm run dev
 
 ## Deployment 🌐
 
-The latest version is deployed at: **PLACEHOLDER**
+The latest version is deployed at: https://mapenu-web.vercel.app/
 
 ---
 
