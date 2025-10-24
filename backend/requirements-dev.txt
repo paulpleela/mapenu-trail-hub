@@ -1,0 +1,32 @@
+# ============================================
+# MAPENU Backend - Development Requirements
+# ============================================
+# Install with: pip install -r requirements-dev.txt
+
+# Include production requirements
+-r requirements.txt
+
+# --- Development Tools ---
+black>=23.0.0  # Code formatter
+flake8>=6.0.0  # Linter
+mypy>=1.0.0  # Type checker
+isort>=5.12.0  # Import sorter
+
+# --- Testing Tools ---
+pytest-watch>=4.2.0  # Auto-run tests on file changes
+pytest-xdist>=3.3.0  # Parallel test execution
+faker>=18.0.0  # Generate fake test data
+freezegun>=1.2.0  # Mock datetime for tests
+
+# --- Documentation ---
+mkdocs>=1.5.0  # Documentation generator
+mkdocs-material>=9.0.0  # Material theme for docs
+
+# --- Code Quality ---
+pylint>=3.0.0  # Additional linting
+autopep8>=2.0.0  # Auto PEP8 formatter
+bandit>=1.7.0  # Security linter
+
+# --- Debugging ---
+ipython>=8.12.0  # Enhanced Python shell
+ipdb>=0.13.0  # IPython debugger

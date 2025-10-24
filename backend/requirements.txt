@@ -1,43 +1,55 @@
+# ============================================
+# MAPENU Backend - Requirements
+# ============================================
+
+# --- Core Web Framework ---
 fastapi==0.104.1
-uvicorn==0.24.0
+uvicorn[standard]==0.24.0
 python-multipart==0.0.6
-gpxpy==1.5.0
-folium==0.15.0
-matplotlib==3.8.2
-supabase==2.18.0
 python-dotenv==1.0.0
 requests>=2.31.0
 
-# --- Geospatial & scientific stack ---
-numpy>=1.24.0
-pandas>=2.0.0
-scipy>=1.10.0
+# --- Database & API ---
+supabase==2.18.0
+httpx>=0.24.0
 
-# Geospatial libraries
-rasterio>=1.3.0
-geopandas>=0.13.0
-shapely>=2.0.0
-fiona>=1.9.0
-pyproj>=3.6.0
+# --- Scientific Computing ---
+numpy>=1.24.0,<2.0.0
+pandas>=2.0.0,<3.0.0
+scipy>=1.10.0,<2.0.0
 
-# LiDAR / point-cloud
-laspy>=2.4.0
-lazrs>=0.5.0
+# --- Geospatial Libraries ---
+rasterio>=1.3.0,<2.0.0
+geopandas>=0.13.0,<2.0.0
+shapely>=2.0.0,<3.0.0
+fiona>=1.9.0,<2.0.0
+pyproj>=3.6.0,<4.0.0
 
-# Visualization
-plotly>=5.15.0
-seaborn>=0.12.0
-folium>=0.14.0
+# --- LiDAR / Point Cloud Processing ---
+laspy>=2.4.0,<3.0.0
+lazrs>=0.5.0,<1.0.0
 
-# Utilities / optional
-contextily>=1.4.0
-earthpy>=0.9.4
-open3d>=0.17.0
-pyntcloud>=0.3.1
-pyvista>=0.42.0
-panel>=1.2.0
+# --- Visualization ---
+matplotlib>=3.8.0,<4.0.0
+plotly>=5.15.0,<6.0.0
+seaborn>=0.12.0,<1.0.0
+folium>=0.14.0,<1.0.0
 
-# Note: some optional packages (open3d, pyvista) are large and may be installed only when needed
+# --- GPS & Trail Data ---
+gpxpy>=1.5.0,<2.0.0
 
-# Excel parsing
-openpyxl>=3.1.2
+# --- Excel Parsing ---
+openpyxl>=3.1.2,<4.0.0
+
+# --- Testing ---
+pytest>=7.4.0,<9.0.0
+pytest-cov>=4.1.0,<8.0.0
+pytest-asyncio>=0.21.0,<2.0.0
+
+# --- Optional Visualization (Large packages - install separately if needed) ---
+# open3d>=0.17.0  # 3D visualization
+# pyvista>=0.42.0  # 3D visualization
+# pyntcloud>=0.3.1  # Point cloud processing
+# contextily>=1.4.0  # Basemap tiles
+# earthpy>=0.9.4  # Geospatial utilities
+# panel>=1.2.0  # Interactive dashboards
