@@ -8,8 +8,6 @@ A modern React-based web application for trail analysis, visualization, and shar
 
 MAPENU enables users to analyze, visualize, and share trail data using geospatial elevation sources (GPX, LiDAR, DTM). The system detects and classifies rolling hill patterns, provides interactive maps and charts, and supports reproducible terrain analysis for trail certification and planning.
 
-**PLACEHOLDER: Project logo or banner image here**
-
 ---
 
 ## Features ✨
@@ -77,12 +75,6 @@ npm run dev
 ```
 
 Frontend will run on: `http://localhost:5173`
-
----
-
-## Deployment 🌐
-
-The latest version is deployed at: **PLACEHOLDER**
 
 ---
 
