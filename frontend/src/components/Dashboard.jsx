@@ -319,7 +319,8 @@ export default function Dashboard() {
       const response = await fetch(`${API_BASE_URL}/analytics/overview`);
       const data = await response.json();
       if (data.success) {
-        setAnalytics(data.analytics);
+        // Backend returns analytics data directly, not wrapped in "analytics" object
+        setAnalytics(data);
       }
     } catch (err) {
       console.error("Failed to load analytics:", err);
@@ -1117,14 +1118,24 @@ export default function Dashboard() {
                       🏔️ Most Challenging
                     </h5>
                     <p className="text-gray-600">
-                      {analytics.most_challenging}
+                      {analytics.most_challenging?.name || 'N/A'}
                     </p>
+                    {analytics.most_challenging && (
+                      <p className="text-sm text-gray-500">
+                        Difficulty: {analytics.most_challenging.difficulty_score?.toFixed(1)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <h5 className="font-semibold text-gray-800">
                       📏 Longest Trail
                     </h5>
-                    <p className="text-gray-600">{analytics.longest_trail}</p>
+                    <p className="text-gray-600">{analytics.longest_trail?.name || 'N/A'}</p>
+                    {analytics.longest_trail && (
+                      <p className="text-sm text-gray-500">
+                        Distance: {analytics.longest_trail.distance?.toFixed(2)} km
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

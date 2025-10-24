@@ -6,44 +6,53 @@ const ElevationChart = ({ elevationSources }) => {
   const chartData = useMemo(() => {
     if (!elevationSources) return [];
     
-    // Find the source with the most data points to use as the base
+    // Get all available sources
     const availableSources = Object.entries(elevationSources)
-      .filter(([key, source]) => source.available && source.elevations?.length > 0)
-      .sort((a, b) => b[1].elevations.length - a[1].elevations.length);
+      .filter(([key, source]) => source.available && source.elevations?.length > 0);
     
     if (availableSources.length === 0) return [];
     
-    // Use the source with most data points as base
-    const [baseName, baseSource] = availableSources[0];
-    const baseElevations = baseSource.elevations;
-    const baseDistances = baseSource.distances;
+    // Create a unified array of all distance points from all sources
+    const allDistances = new Set();
+    availableSources.forEach(([name, source]) => {
+      if (source.distances && source.distances.length > 0) {
+        source.distances.forEach(d => allDistances.add(d));
+      }
+    });
     
-    if (!baseElevations || !baseDistances || baseElevations.length === 0) return [];
+    // Convert to sorted array
+    const sortedDistances = Array.from(allDistances).sort((a, b) => a - b);
     
-    // Create chart data array
-    const data = baseElevations.map((elevation, index) => {
-      const point = {
-        distance: baseDistances[index] || index * 0.01, // Fallback distance
-        [`${baseName}_elevation`]: elevation,
-      };
+    // Create data points for each distance
+    const data = sortedDistances.map(distance => {
+      const point = { distance };
       
-      // Add other sources if they have similar length
-      availableSources.slice(1).forEach(([sourceName, source]) => {
-        if (source.elevations && source.elevations.length > 0) {
-          // Simple nearest neighbor mapping for other sources
-          const sourceIndex = Math.min(
-            Math.round((index / baseElevations.length) * source.elevations.length),
-            source.elevations.length - 1
-          );
-          point[`${sourceName}_elevation`] = source.elevations[sourceIndex];
+      // For each source, find the closest elevation value for this distance
+      availableSources.forEach(([sourceName, source]) => {
+        if (source.distances && source.elevations) {
+          // Find the closest distance in this source's data
+          let closestIndex = 0;
+          let minDiff = Math.abs(source.distances[0] - distance);
+          
+          for (let i = 1; i < source.distances.length; i++) {
+            const diff = Math.abs(source.distances[i] - distance);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closestIndex = i;
+            }
+          }
+          
+          // Only include if the distance is close enough (within 0.01 km = 10m)
+          if (minDiff < 0.01) {
+            point[`${sourceName}_elevation`] = source.elevations[closestIndex];
+          }
         }
       });
       
       return point;
     });
     
-    // Sort by distance to ensure proper line plotting
-    return data.sort((a, b) => a.distance - b.distance);
+    return data;
   }, [elevationSources]);
   
   // Get available sources for legend
