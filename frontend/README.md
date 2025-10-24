@@ -3,24 +3,30 @@
 
 A modern React-based web application for trail analysis, visualization, and sharing.
 
+---
+
+## Overview
+
+MAPENU enables users to analyze, visualize, and share trail data using geospatial elevation sources (GPX, LiDAR, DTM). The system detects and classifies rolling hill patterns, provides interactive maps and charts, and supports reproducible terrain analysis for trail certification and planning.
+
+**PLACEHOLDER: Project logo or banner image here**
+
+---
+
 ## Features ✨
 
 - **📤 GPX & LiDAR Uploads**: Upload trail data from GPX files, LiDAR scans, or use MAPENU's built-in GPX Tracker. The upload modal supports multiple formats and guides users through the process.
-- **🗺️ Interactive Map Interface**: The Dashboard displays an interactive map with selectable trails, start/end markers, and overlays for elevation and terrain. Users can refresh data, filter trails, and view real-time updates.
-- **📊 Trail Metrics & Insights**: For each trail, view detailed statistics including elevation gain/loss, total distance, rolling hills count, technical rating, and difficulty score. Metrics are visualized with charts and summary cards.
-- **📈 Elevation Profile & Slope Analysis**: The ElevationChart component shows the trail’s elevation profile, slope variation (highlighted in yellow), and key stats like elevation range and slope extremes.
-- **🌄 High-Resolution Terrain Data**: Explore official QSpatial DEM and user-supplied LiDAR visualizations in 3D using Three.js. The TrailVisualization component renders interactive terrain models and point clouds.
-- **🧭 Trail Recommendations**: The app suggests similar trails based on your activity and preferences, helping users discover new routes.
-- **📚 User Guide & Analytics**: The InfoPage provides comprehensive help, best practices, and explanations of all metrics and scales. The Analytics page summarizes network-wide statistics, difficulty distributions, and trail comparisons.
-- **🛰️ Built-in GPX Tracker**: A dedicated page for recording and exporting GPX tracks directly from the platform, streamlining field data collection.
+- **🗺️ Interactive Map Interface**: Explore trails, start/end markers, overlays for elevation and terrain, and real-time updates.
+- **📊 Trail Metrics & Insights**: View elevation gain/loss, distance, rolling hills count, technical rating, and difficulty score. Metrics are visualized with charts and summary cards.
+- **📈 Elevation Profile & Slope Analysis**: See elevation profiles, slope variation, and key stats.
+- **🌄 High-Resolution Terrain Data**: Visualize QSpatial DEM and user-supplied LiDAR in 3D.
+- **🧭 Trail Recommendations**: Discover similar trails based on your activity and preferences.
+- **📚 User Guide & Analytics**: Access help, best practices, and analytics dashboards.
+- **🛰️ Built-in GPX Tracker**: Record and export GPX tracks directly from the platform.
 
-## Tech Stack 🛠️
+**PLACEHOLDER: Example website screenshot here**
 
-- **⚛️ React** (with Vite for fast development and hot reload)
-- **🎨 Tailwind CSS** (for modern, responsive UI)
-- **🟩 Node.js** (for development tooling)
-- **🔺 Three.js** (for 3D terrain and LiDAR visualization)
-- **🔗 Fetch API** (for backend communication)
+---
 
 ## Project Structure 🗂️
 
@@ -40,7 +46,19 @@ frontend/
 └── README.md              # Project documentation
 ```
 
-## Setup & Development ⚡
+---
+
+## Tech Stack 🛠️
+
+- **⚛️ React** (Vite)
+- **🎨 Tailwind CSS**
+- **🟩 Node.js**
+- **🔺 Three.js**
+- **🔗 Fetch API**
+
+---
+
+## How to Run Locally ⚡
 
 ### Prerequisites
 - 🟩 Node.js 18+
@@ -57,6 +75,14 @@ npm run dev
 ```
 Frontend will run on: `http://localhost:5173`
 
+---
+
+## Deployment 🌐
+
+The latest version is deployed at: **PLACEHOLDER**
+
+---
+
 ## Usage 🚀
 
 - **🗺️ Main Dashboard**: Upload GPX or LiDAR files, refresh data, and explore trails on the interactive map.
@@ -66,12 +92,16 @@ Frontend will run on: `http://localhost:5173`
 - **📈 Analytics**: View aggregate statistics and compare trails.
 - **🛰️ GPX Tracker**: Use the built-in tracker for direct field data collection.
 
+---
+
 ## Contributing 🤝
 
-- Fork the repository
-- Create a feature branch
-- Commit and push your changes
-- Open a pull request
+1. Fork the repository
+2. Create a feature branch
+3. Commit and push your changes
+4. Open a pull request
+
+---
 
 ## License 📄
 This project is private and proprietary.
