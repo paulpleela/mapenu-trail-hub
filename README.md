@@ -121,4 +121,18 @@ This project is private and proprietary.
 
 ---
 
+## 🤖 AI Acknowledgment
+This project used GitHub Copilot as a coding assistant to help with debugging, fixing syntax errors, and suggesting code completions during development.
+All ideas, architectural designs, and final implementation decisions were developed independently by our team.
+AI-generated code suggestions were reviewed, tested, and modified to fit the project’s design intent and coding standards.
+Example Prompts Used:
+- “Fix the syntax error in this React component.”
+- “Why does this useEffect cause an infinite re-render?”
+- “Suggest a cleaner way to handle this form submission in React.”
+- “Add proper error handling for this async API call.”
+- “Explain what this TypeScript error means and how to fix it.”
+- “Improve the readability of this JSX render function.”
+
+---
+
 Made with ❤️ for trail enthusiasts
