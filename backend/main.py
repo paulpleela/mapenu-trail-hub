@@ -22,7 +22,7 @@ load_dotenv()
 
 # Initialize DEM analyzer
 try:
-    from real_dem_analysis import RealDEMAnalyzer
+    from utils.real_dem_analysis import RealDEMAnalyzer
 
     dem_path = os.path.join(
         os.path.dirname(__file__), "data", "QSpatial", "DEM", "1 Metre"
@@ -39,7 +39,7 @@ except Exception as e:
 
 # Initialize LiDAR extractor
 try:
-    from lidar_extraction import LiDARExtractor
+    from utils.lidar_extraction import LiDARExtractor
 
     lidar_cache_path = "/tmp/lidar_cache"
     lidar_extractor = LiDARExtractor(lidar_cache_path, supabase_client=supabase)

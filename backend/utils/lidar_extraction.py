@@ -612,7 +612,7 @@ class LiDARExtractor:
 
 if __name__ == "__main__":
     # Test the extractor
-    lidar_path = os.path.join(os.path.dirname(__file__), "data", "LiDAR")
+    lidar_path = os.path.join(os.path.dirname(__file__), "..", "data", "LiDAR")
     extractor = LiDARExtractor(lidar_path)
 
     print("\n=== LiDAR Files Found ===")
