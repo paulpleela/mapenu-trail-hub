@@ -29,32 +29,43 @@ MAPENU Backend is a powerful RESTful API for trail analysis and visualization. I
 ```
 backend/
 ├── main.py                 # FastAPI application entry point
-├── config.py              # Configuration management
-├── database.py            # Supabase client initialization
-├── app_state.py          # Shared application state
-├── lidar_extraction.py   # LiDAR processing service
-├── real_dem_analysis.py  # DEM analysis service
+├── config.py               # Configuration management
+├── database.py             # Supabase client initialization
+├── app_state.py            # Shared application state
+├── lidar_extraction.py     # LiDAR processing service
+├── real_dem_analysis.py    # DEM analysis service
 │
-├── routes/               # API endpoints (2,482 lines)
-│   ├── trails.py        # Trail CRUD & analytics
-│   ├── uploads.py       # File upload handlers
-│   ├── analysis.py      # Elevation analysis
-│   └── maps.py          # Map generation
+├── routes/                 # API endpoints (2,482 lines)
+│   ├── trails.py           # Trail CRUD & analytics
+│   ├── uploads.py          # File upload handlers
+│   ├── analysis.py         # Elevation analysis
+│   └── maps.py             # Map generation
 │
-├── utils/               # Reusable utilities (775 lines)
-│   ├── calculations.py         # Math functions
-│   ├── terrain_analysis.py    # Terrain utilities
-│   └── dem_processing.py      # DEM utilities
+├── utils/                  # Reusable utilities (775 lines)
+│   ├── calculations.py     # Math functions
+│   ├── terrain_analysis.py # Terrain utilities
+│   └── dem_processing.py   # DEM utilities
 │
-├── tests/               # Unit tests (48 tests)
+├── tests/                  # Unit tests (48 tests)
 │   └── TESTING_GUIDE.md
 │
-└── scripts/             # Admin tools
-    ├── add_local_lidar_to_db.py
-    ├── diagnose_lidar.py
-    ├── test_lidar.py
-    └── update_technical_rating.py
+├── scripts/                # Admin tools
+│   ├── add_local_lidar_to_db.py
+│   ├── diagnose_lidar.py
+│   ├── test_lidar.py
+│   └── update_technical_rating.py
+│
+├── sql/                    # Database schema and bucket setup
+│   ├── create_table_trails.sql         # Create main trails table
+│   ├── create_table_lidar_files.sql    # Create LiDAR file metadata table
+│   ├── create_table_xlsx_files.sql     # Create XLSX elevation data table
+│   ├── create_bucket_lidar_files.sql   # Set up storage bucket for LiDAR files
+│   └── create_bucket_xlsx_files.sql    # Set up storage bucket for XLSX files
 ```
+
+### SQL Folder
+
+The `sql/` directory contains SQL scripts for setting up and managing the database schema. These scripts include table creation for trails, LiDAR files, and XLSX files, as well as bucket setup for file storage. Use these scripts to initialize or update your Supabase/PostgreSQL database structure as required for MAPENU.
 
 ## 🚀 Quick Start
 
@@ -396,14 +407,18 @@ This project is private and proprietary.
 
 ## 👥 Authors
 
-- **phurinjeffy** - Initial work - [GitHub](https://github.com/phurinjeffy)
+- **phurinjeffy** - [GitHub](https://github.com/phurinjeffy)
+- **nownver** - [GitHub](https://github.com/nownver)
+- **paulpleela** - [GitHub](https://github.com/paulpleela)
+- **Enix47** - [GitHub](https://github.com/Enix47)
+- **matildas23** - [GitHub](https://github.com/matildas23)
+- **Dmar-Create** - [GitHub](https://github.com/Dmar-Create)
 
 ## 🙏 Acknowledgments
 
 - FastAPI for excellent web framework
 - Supabase for powerful backend services
 - Queensland Spatial for DEM data
-- LASpy team for LiDAR processing tools
 
 ## 📞 Support
 
