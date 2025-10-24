@@ -1,4 +1,3 @@
-
 # MAPENU Frontend 🗺️
 
 A modern React-based web application for trail analysis, visualization, and sharing.
@@ -61,18 +60,22 @@ frontend/
 ## How to Run Locally ⚡
 
 ### Prerequisites
+
 - 🟩 Node.js 18+
 
 ### Install Dependencies
+
 ```bash
 cd frontend
 npm install
 ```
 
 ### Run Development Server
+
 ```bash
 npm run dev
 ```
+
 Frontend will run on: `http://localhost:5173`
 
 ---
@@ -104,6 +107,7 @@ The latest version is deployed at: **PLACEHOLDER**
 ---
 
 ## License 📄
+
 This project is private and proprietary.
 
 ---

@@ -405,14 +405,6 @@ pip check
 
 This project is private and proprietary.
 
-## 👥 Authors
-
-- **phurinjeffy** - [GitHub](https://github.com/phurinjeffy)
-- **nownver** - [GitHub](https://github.com/nownver)
-- **paulpleela** - [GitHub](https://github.com/paulpleela)
-- **Enix47** - [GitHub](https://github.com/Enix47)
-- **matildas23** - [GitHub](https://github.com/matildas23)
-- **Dmar-Create** - [GitHub](https://github.com/Dmar-Create)
 
 ## 🙏 Acknowledgments
 
