@@ -23,7 +23,22 @@ DEM_PATH = os.path.join(
 LIDAR_CACHE_PATH = "/tmp/lidar_cache"
 
 # CORS Configuration
-CORS_ORIGINS = ["*"]  # Configure as needed for production
+# Allow configuring origins via the CORS_ORIGINS environment variable.
+cors_env = os.getenv("CORS_ORIGINS")
+if cors_env:
+    try:
+        import json
+
+        parsed = json.loads(cors_env)
+        if isinstance(parsed, str):
+            CORS_ORIGINS = [parsed]
+        else:
+            CORS_ORIGINS = parsed
+    except Exception:
+        # Fallback: comma separated list
+        CORS_ORIGINS = [o.strip() for o in cors_env.split(",") if o.strip()]
+else:
+    CORS_ORIGINS = ["*"]  # default permissive for local development
 
 # Application Settings
 MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB

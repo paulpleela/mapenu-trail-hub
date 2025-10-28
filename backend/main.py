@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 # Import database clients
 from database import supabase, supabase_service
+from config import CORS_ORIGINS
 
 # Import shared application state
 import app_state
@@ -62,7 +63,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

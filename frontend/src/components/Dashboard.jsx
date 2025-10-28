@@ -36,8 +36,7 @@ import {
 } from "lucide-react";
 import InfoPage from "./InfoPage";
 
-// API URL
-const API_BASE_URL = "http://localhost:8000";
+import API_BASE_URL from "../config/api";
 
 // Helper function for terrain variety description
 const getTerrainVarietyDescription = (score) => {
@@ -1353,7 +1352,7 @@ export default function Dashboard() {
                                     const distance = parseFloat(sourceData.distances[idx]);
                                     const elevation = parseFloat(elev);
                                     const slope = parseFloat(sourceData.slopes?.[idx]) || 0;
-                                    
+
                                     // Validate that values are finite numbers
                                     return {
                                       distance: Number.isFinite(distance) ? distance : 0,
@@ -1362,18 +1361,18 @@ export default function Dashboard() {
                                     };
                                   }
                                 ).filter(point => 
-                                  // Filter out invalid data points
-                                  Number.isFinite(point.distance) && 
-                                  Number.isFinite(point.elevation) &&
-                                  point.elevation > -1000 && // Reasonable elevation bounds
-                                  point.elevation < 10000
-                                );
-                                
+                                      // Filter out invalid data points
+                                      Number.isFinite(point.distance) &&
+                                      Number.isFinite(point.elevation) &&
+                                      point.elevation > -1000 && // Reasonable elevation bounds
+                                      point.elevation < 10000
+                                  );
+
                                 // Sort by distance for XLSX to prevent line artifacts
                                 if (selectedElevationSource === 'XLSX') {
                                   chartData.sort((a, b) => a.distance - b.distance);
                                 }
-                                
+
                                 return chartData;
                               })()}
                             >
