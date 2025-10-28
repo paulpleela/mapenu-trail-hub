@@ -2,6 +2,7 @@
 MAPENU Backend - Main FastAPI Application
 Refactored modular version with route separation
 """
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -45,7 +46,9 @@ try:
     lidar_cache_path = "/tmp/lidar_cache"
     lidar_extractor = LiDARExtractor(lidar_cache_path, supabase_client=supabase)
     app_state.set_lidar_extractor(lidar_extractor)
-    print(f"✅ LiDAR Extractor initialized with {len(lidar_extractor.lidar_files)} LiDAR files")
+    print(
+        f"✅ LiDAR Extractor initialized with {len(lidar_extractor.lidar_files)} LiDAR files"
+    )
 except ImportError as e:
     print(f"⚠️  LiDAR extraction not available: {e}")
     lidar_extractor = None
@@ -110,4 +113,9 @@ async def shutdown_event():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # When running directly (useful for local dev), read host/port from env so
+    # platform deployments (Render) can override via $PORT and bind to 0.0.0.0.
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 8000))
+    reload_env = os.getenv("RELOAD", "false").lower() in ("1", "true", "yes")
+    uvicorn.run(app, host=host, port=port, reload=reload_env)
