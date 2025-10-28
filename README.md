@@ -82,7 +82,7 @@ npm run dev
 
 ## Deployment 🌐
 
-The latest version is deployed at: https://mapenu-web.vercel.app/
+The latest version is deployed at: https://mapenu.site/
 
 ---
 
